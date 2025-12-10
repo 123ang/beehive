@@ -1,0 +1,203 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom CSS Variables */
+:root {
+  --foreground-rgb: 255, 255, 255;
+  --background-start-rgb: 10, 10, 15;
+  --background-end-rgb: 24, 24, 37;
+  --honey-glow: rgba(251, 191, 36, 0.3);
+}
+
+/* Base styles */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+    135deg,
+    rgb(var(--background-start-rgb)) 0%,
+    rgb(var(--background-end-rgb)) 100%
+  );
+  min-height: 100vh;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(251, 191, 36, 0.4);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(251, 191, 36, 0.6);
+}
+
+/* Utility classes */
+@layer utilities {
+  .text-gradient-gold {
+    @apply bg-gradient-to-r from-honey-400 via-honey-300 to-honey-500 bg-clip-text text-transparent;
+  }
+
+  .bg-glass {
+    @apply bg-white/5 backdrop-blur-xl border border-white/10;
+  }
+
+  .bg-glass-dark {
+    @apply bg-black/40 backdrop-blur-xl border border-white/5;
+  }
+
+  .hexagon {
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  }
+
+  .glow-border {
+    @apply relative;
+  }
+
+  .glow-border::before {
+    content: "";
+    @apply absolute inset-0 rounded-xl;
+    background: linear-gradient(
+      135deg,
+      rgba(251, 191, 36, 0.3) 0%,
+      transparent 50%,
+      rgba(251, 191, 36, 0.1) 100%
+    );
+    z-index: -1;
+    filter: blur(10px);
+  }
+}
+
+/* Honeycomb Background Pattern */
+.honeycomb-bg {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='49' viewBox='0 0 28 49'%3E%3Cg fill-rule='evenodd'%3E%3Cg fill='%23fbbf24' fill-opacity='0.04'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15l12.99-7.5zM3 17.9v12.7l10.99 6.34 11-6.35V17.9l-11-6.34L3 17.9zM0 15l12.98-7.5V0h-2v6.35L0 12.69v2.3zm0 18.5L12.98 41v8h-2v-6.85L0 35.81v-2.3zM15 0v7.5L27.99 15H28v-2.31h-.01L17 6.35V0h-2zm0 49v-8l12.99-7.5H28v2.31h-.01L17 42.15V49h-2z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* Animated gradient border */
+.gradient-border {
+  position: relative;
+  background: linear-gradient(135deg, #1e1e2e 0%, #11111b 100%);
+  border-radius: 1rem;
+}
+
+.gradient-border::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 1rem;
+  padding: 2px;
+  background: linear-gradient(
+    135deg,
+    #fbbf24 0%,
+    #f59e0b 25%,
+    #fbbf24 50%,
+    #f59e0b 75%,
+    #fbbf24 100%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: shimmer 3s linear infinite;
+  background-size: 200% 200%;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Level card styles */
+.level-card {
+  @apply relative overflow-hidden rounded-xl transition-all duration-300;
+  background: linear-gradient(135deg, rgba(30, 30, 46, 0.8) 0%, rgba(17, 17, 27, 0.9) 100%);
+}
+
+.level-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px rgba(251, 191, 36, 0.2);
+}
+
+.level-card.active {
+  @apply ring-2 ring-honey-500;
+}
+
+.level-card.locked {
+  @apply opacity-60;
+}
+
+/* Button styles */
+.btn-honey {
+  @apply relative px-6 py-3 rounded-lg font-semibold transition-all duration-300;
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  color: #000;
+}
+
+.btn-honey:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(251, 191, 36, 0.4);
+}
+
+.btn-honey:active {
+  transform: translateY(0);
+}
+
+.btn-honey:disabled {
+  @apply opacity-50 cursor-not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Wallet button override */
+[data-rk] button {
+  @apply font-display;
+}
+
+/* Toast styles */
+.toast-success {
+  @apply bg-green-900/80 border-green-500/50;
+}
+
+.toast-error {
+  @apply bg-red-900/80 border-red-500/50;
+}
+
+/* Stats card animation */
+.stats-card {
+  @apply relative overflow-hidden;
+}
+
+.stats-card::after {
+  content: "";
+  @apply absolute inset-0 opacity-0 transition-opacity duration-300;
+  background: linear-gradient(
+    135deg,
+    transparent 0%,
+    rgba(251, 191, 36, 0.1) 50%,
+    transparent 100%
+  );
+}
+
+.stats-card:hover::after {
+  @apply opacity-100;
+}
+

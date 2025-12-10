@@ -1,0 +1,29 @@
+{
+  "name": "beehive",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Beehive - Web3 Membership & Rewards Platform",
+  "scripts": {
+    "dev": "pnpm --parallel -r run dev",
+    "dev:web": "pnpm --filter @beehive/web dev",
+    "dev:api": "pnpm --filter @beehive/api dev",
+    "build": "pnpm --parallel -r run build",
+    "build:web": "pnpm --filter @beehive/web build",
+    "build:api": "pnpm --filter @beehive/api build",
+    "start": "pnpm --parallel -r run start",
+    "db:generate": "pnpm --filter @beehive/api db:generate",
+    "db:migrate": "pnpm --filter @beehive/api db:migrate",
+    "db:studio": "pnpm --filter @beehive/api db:studio",
+    "lint": "pnpm --parallel -r run lint",
+    "clean": "pnpm --parallel -r run clean"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "packageManager": "pnpm@9.0.0"
+}
+
