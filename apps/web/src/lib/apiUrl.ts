@@ -25,13 +25,15 @@ export function getApiEndpoint(path: string): string {
   // Remove leading slash from path if present
   const cleanPath = path.startsWith("/") ? path : `/${path}`;
   
+  // Always ensure path starts with /api
+  const apiPath = cleanPath.startsWith("/api") ? cleanPath : `/api${cleanPath}`;
+  
   if (baseUrl) {
-    // Absolute URL - ensure path starts with /api
-    const apiPath = cleanPath.startsWith("/api") ? cleanPath : `/api${cleanPath}`;
+    // Absolute URL - combine base URL with API path
     return `${baseUrl}${apiPath}`;
   }
   
-  // Relative path - use as-is (Nginx will handle routing)
-  return cleanPath;
+  // Relative path - return with /api prefix (Nginx will proxy to API backend)
+  return apiPath;
 }
 
