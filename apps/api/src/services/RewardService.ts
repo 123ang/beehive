@@ -25,6 +25,13 @@ export class RewardService {
 
     const directSponsorReward = 100; // 100 USDT
 
+    // Get actual direct referrals count for business logic
+    const directReferralsResult = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(members)
+      .where(eq(members.sponsorId, sponsor.id));
+    const actualDirectReferrals = directReferralsResult[0]?.count || 0;
+
     // Check sponsor's level to determine reward status
     if (sponsor.currentLevel === 0) {
       // Pending - sponsor not activated yet
@@ -37,7 +44,7 @@ export class RewardService {
         status: "pending",
         notes: "Pending - sponsor must activate first",
       });
-    } else if (sponsor.currentLevel === 1 && (sponsor.directSponsorCount ?? 0) >= 2) {
+    } else if (sponsor.currentLevel === 1 && actualDirectReferrals >= 2) {
       // Pending - Level 1 members can only receive 2 direct sponsor rewards
       await db.insert(rewards).values({
         recipientWallet: sponsorWallet,
@@ -161,17 +168,33 @@ export class RewardService {
    * Update layer counter for an upline
    */
   private async updateLayerCounter(uplineId: number, layerNumber: number): Promise<void> {
-    await db
-      .insert(layerCounters)
-      .values({
+    // Check if counter exists
+    const existing = await db.query.layerCounters.findFirst({
+      where: and(
+        eq(layerCounters.uplineMemberId, uplineId),
+        eq(layerCounters.layerNumber, layerNumber)
+      ),
+    });
+
+    if (existing) {
+      // Update existing counter
+      await db
+        .update(layerCounters)
+        .set({ upgradeCount: sql`${layerCounters.upgradeCount} + 1` })
+        .where(
+          and(
+            eq(layerCounters.uplineMemberId, uplineId),
+            eq(layerCounters.layerNumber, layerNumber)
+          )
+        );
+    } else {
+      // Insert new counter
+      await db.insert(layerCounters).values({
         uplineMemberId: uplineId,
         layerNumber,
         upgradeCount: 1,
-      })
-      .onConflictDoUpdate({
-        target: [layerCounters.uplineMemberId, layerCounters.layerNumber],
-        set: { upgradeCount: sql`${layerCounters.upgradeCount} + 1` },
       });
+    }
   }
 
   /**

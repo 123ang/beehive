@@ -51,6 +51,7 @@ memberNewsRouter.get("/", async (c) => {
           return {
             ...article,
             title: enTranslation?.title || "Untitled",
+            description: enTranslation?.description || null,
             content: enTranslation?.content || "",
             language: "en",
           };
@@ -59,6 +60,7 @@ memberNewsRouter.get("/", async (c) => {
         return {
           ...article,
           title: translation.title,
+          description: translation.description || null,
           content: translation.content,
           language: lang,
         };
@@ -129,6 +131,7 @@ memberNewsRouter.get("/:id", async (c) => {
         data: {
           ...article,
           title: enTranslation?.title || "Untitled",
+          description: enTranslation?.description || null,
           content: enTranslation?.content || "",
           language: "en",
         },
@@ -140,6 +143,7 @@ memberNewsRouter.get("/:id", async (c) => {
       data: {
         ...article,
         title: translation.title,
+        description: translation.description || null,
         content: translation.content,
         language: lang,
       },

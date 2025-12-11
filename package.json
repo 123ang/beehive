@@ -15,10 +15,18 @@
     "db:migrate": "pnpm --filter @beehive/api db:migrate",
     "db:studio": "pnpm --filter @beehive/api db:studio",
     "lint": "pnpm --parallel -r run lint",
-    "clean": "pnpm --parallel -r run clean"
+    "clean": "pnpm --parallel -r run clean",
+    "drop-and-reimport": "tsx dropAndReimport.ts",
+    "import-csv": "tsx importCSV.ts",
+    "import-csv-only": "tsx importCSVOnly.ts"
   },
   "devDependencies": {
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "csv-parser": "^3.0.0",
+    "dotenv": "^16.3.1",
+    "mysql2": "^3.9.1",
+    "tsx": "^4.7.0",
+    "@types/node": "^20.11.0"
   },
   "engines": {
     "node": ">=20.0.0",

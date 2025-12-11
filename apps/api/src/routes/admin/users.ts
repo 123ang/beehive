@@ -7,6 +7,7 @@ import { logActivity, getClientIp, getUserAgent } from "../../utils/activityLogg
 import { parseFile, isValidWalletAddress } from "../../utils/csvParser";
 import { generateMemberId, generateReferralCode } from "../../utils/referralCode";
 import { createMemberWithPlacement } from "../../utils/memberPlacement";
+import { matrixService } from "../../services/MatrixService";
 
 const adminUsersRouter = new Hono();
 
@@ -640,6 +641,70 @@ adminUsersRouter.get("/import-history", requirePermission("user.bulk_import"), a
     });
   } catch (error) {
     console.error("Get import history error:", error);
+    return c.json({ error: "Internal server error" }, 500);
+  }
+});
+
+/**
+ * Get member tree by wallet address (for admin matrix view)
+ * GET /api/admin/users/tree/:wallet
+ */
+adminUsersRouter.get("/tree/:wallet", requirePermission("user.view"), async (c) => {
+  try {
+    const wallet = c.req.param("wallet").toLowerCase();
+    const depth = parseInt(c.req.query("depth") || "5"); // Default: 5 layers
+    
+    // Find member by wallet address
+    const [member] = await db
+      .select()
+      .from(members)
+      .where(eq(members.walletAddress, wallet))
+      .limit(1);
+
+    if (!member) {
+      return c.json({ error: "Member not found" }, 404);
+    }
+
+    // Get tree structure
+    const tree = await matrixService.getTree(member.id, Math.min(depth, 10));
+    
+    // Get team size and statistics
+    const teamSize = await matrixService.getTeamSize(member.id);
+    const layerCounts = await matrixService.getLayerCounts(member.id);
+    
+    // Calculate max depth
+    const layerKeys = Object.keys(layerCounts).map(Number).filter(d => d > 0);
+    const maxDepth = layerKeys.length > 0 ? Math.max(...layerKeys) : 0;
+
+    // Get actual direct referrals count (members who have this member as sponsor)
+    const directReferralsResult = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(members)
+      .where(eq(members.sponsorId, member.id));
+    const actualDirectReferrals = directReferralsResult[0]?.count || 0;
+
+    return c.json({
+      success: true,
+      data: {
+        member: {
+          id: member.id,
+          walletAddress: member.walletAddress,
+          username: member.username,
+          currentLevel: member.currentLevel,
+          totalInflow: member.totalInflow,
+          directSponsorCount: actualDirectReferrals, // Use calculated count
+          joinedAt: member.joinedAt,
+        },
+        tree,
+        statistics: {
+          teamSize,
+          maxDepth,
+          layerCounts,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Get member tree error:", error);
     return c.json({ error: "Internal server error" }, 500);
   }
 });

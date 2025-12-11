@@ -10,6 +10,7 @@ import { LANGUAGES, type LanguageCode } from "@/i18n/translations";
 
 interface NewsTranslation {
   title: string;
+  description?: string;
   content: string;
 }
 
@@ -24,13 +25,13 @@ export default function AdminNewsEditPage() {
     slug: "",
     status: "draft",
     translations: {
-      en: { title: "", content: "" },
-      "zh-CN": { title: "", content: "" },
-      "zh-TW": { title: "", content: "" },
-      ja: { title: "", content: "" },
-      ko: { title: "", content: "" },
-      th: { title: "", content: "" },
-      ms: { title: "", content: "" },
+      en: { title: "", description: "", content: "" },
+      "zh-CN": { title: "", description: "", content: "" },
+      "zh-TW": { title: "", description: "", content: "" },
+      ja: { title: "", description: "", content: "" },
+      ko: { title: "", description: "", content: "" },
+      th: { title: "", description: "", content: "" },
+      ms: { title: "", description: "", content: "" },
     } as Record<string, NewsTranslation>,
   });
   const contentEditableRef = useRef<HTMLDivElement>(null);
@@ -287,6 +288,30 @@ export default function AdminNewsEditPage() {
                 }
                 className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white text-2xl font-bold"
                 placeholder={t("admin.news.enterTitle")}
+              />
+            </div>
+
+            {/* Description */}
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">
+                {t("admin.news.descriptionLabel") || "Description"} ({currentLang.toUpperCase()})
+              </label>
+              <textarea
+                value={formData.translations[currentLang]?.description || ""}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    translations: {
+                      ...formData.translations,
+                      [currentLang]: {
+                        ...formData.translations[currentLang],
+                        description: e.target.value,
+                      },
+                    },
+                  })
+                }
+                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 min-h-[100px]"
+                placeholder={t("admin.news.enterDescription") || "Enter a brief description (optional)"}
               />
             </div>
 

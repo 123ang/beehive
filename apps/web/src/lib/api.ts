@@ -96,24 +96,71 @@ class ApiClient {
   }
 
   // Member endpoints
-  async getDashboard() {
-    return this.request<any>("/api/members/dashboard");
+  async getDashboard(address?: string) {
+    const url = address 
+      ? `/api/members/dashboard?address=${encodeURIComponent(address)}`
+      : "/api/members/dashboard";
+    return this.request<any>(url);
   }
 
   async getTree(depth: number = 3) {
     return this.request<any>(`/api/members/tree?depth=${depth}`);
   }
 
+  async getMatrix(address?: string) {
+    const url = address 
+      ? `/api/members/matrix?address=${encodeURIComponent(address)}`
+      : "/api/members/matrix";
+    return this.request<any>(url);
+  }
+
   async getLayers() {
     return this.request<any>("/api/members/layers");
   }
 
-  async getRewards(page: number = 1, limit: number = 20) {
-    return this.request<any>(`/api/members/rewards?page=${page}&limit=${limit}`);
+  async getRewards(address?: string, page: number = 1, limit: number = 20) {
+    const url = address 
+      ? `/api/members/rewards?address=${encodeURIComponent(address)}&page=${page}&limit=${limit}`
+      : `/api/members/rewards?page=${page}&limit=${limit}`;
+    return this.request<any>(url);
   }
 
   async getReferral() {
     return this.request<any>("/api/members/referral");
+  }
+
+  async getNFTCollections() {
+    return this.request<any>("/api/members/nft");
+  }
+
+  async getNFTCollection(id: number) {
+    return this.request<any>(`/api/members/nft/${id}`);
+  }
+
+  async getClasses() {
+    return this.request<any>("/api/members/classes");
+  }
+
+  async getClass(id: number) {
+    return this.request<any>(`/api/members/classes/${id}`);
+  }
+
+  async getMerchants() {
+    return this.request<any>("/api/members/merchants");
+  }
+
+  async getMerchant(id: number) {
+    return this.request<any>(`/api/members/merchants/${id}`);
+  }
+
+  async getNews(lang?: string) {
+    const url = lang ? `/api/members/news?lang=${lang}` : "/api/members/news";
+    return this.request<any>(url);
+  }
+
+  async getNewsArticle(id: number, lang?: string) {
+    const url = lang ? `/api/members/news/${id}?lang=${lang}` : `/api/members/news/${id}`;
+    return this.request<any>(url);
   }
 
   async registerMember(txHash: string, level: number, referrerAddress: string) {

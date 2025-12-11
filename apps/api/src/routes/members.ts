@@ -5,32 +5,55 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { db, members, rewards } from "../db";
-import { eq, desc } from "drizzle-orm";
+import { db, members, rewards, placements } from "../db";
+import { eq, desc, sql, asc } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
 import { matrixService } from "../services/MatrixService";
 import { rewardService } from "../services/RewardService";
 import { MEMBERSHIP_LEVELS } from "@beehive/shared";
 import memberNewsRouter from "./members/news";
 import memberMerchantsRouter from "./members/merchants";
+import memberNftRouter from "./members/nft";
+import memberClassesRouter from "./members/classes";
 
 export const memberRoutes = new Hono();
 
 // Public member routes (no auth required)
 memberRoutes.route("/news", memberNewsRouter);
 memberRoutes.route("/merchants", memberMerchantsRouter);
-
-// Apply auth middleware to protected routes
-memberRoutes.use("/*", authMiddleware);
+memberRoutes.route("/nft", memberNftRouter);
+memberRoutes.route("/classes", memberClassesRouter);
 
 /**
- * Get current member's dashboard data
+ * Get member's dashboard data by wallet address (no auth required)
+ * This allows users to view their own data after connecting wallet
  */
 memberRoutes.get("/dashboard", async (c) => {
-  const user = c.get("user");
+  // Get wallet address from query parameter or Authorization header
+  const walletAddress = c.req.query("address");
+  const authHeader = c.req.header("Authorization");
+  
+  let address: string | undefined;
+  
+  if (walletAddress) {
+    // Public access via query parameter
+    address = walletAddress.toLowerCase();
+  } else if (authHeader?.startsWith("Bearer ")) {
+    // Authenticated access via JWT token
+    const token = authHeader.substring(7);
+    const { verifyToken } = await import("../lib/jwt");
+    const payload = await verifyToken(token);
+    if (payload) {
+      address = payload.walletAddress;
+    }
+  }
+  
+  if (!address) {
+    return c.json({ success: false, error: "Wallet address required" }, 400);
+  }
 
   const member = await db.query.members.findFirst({
-    where: eq(members.walletAddress, user.walletAddress),
+    where: eq(members.walletAddress, address),
   });
 
   if (!member) {
@@ -50,10 +73,17 @@ memberRoutes.get("/dashboard", async (c) => {
   }
 
   // Get reward summary
-  const rewardSummary = await rewardService.getRewardSummary(user.walletAddress);
+  const rewardSummary = await rewardService.getRewardSummary(address);
 
   // Get team size
   const teamSize = await matrixService.getTeamSize(member.id);
+
+  // Get actual direct referrals count (members who have this member as sponsor)
+  const directReferralsResult = await db
+    .select({ count: sql<number>`COUNT(*)` })
+    .from(members)
+    .where(eq(members.sponsorId, member.id));
+  const actualDirectReferrals = directReferralsResult[0]?.count || 0;
 
   return c.json({
     success: true,
@@ -68,7 +98,7 @@ memberRoutes.get("/dashboard", async (c) => {
       totalEarningsBCC: rewardSummary.totalBCC,
       pendingRewardsUSDT: rewardSummary.pendingUSDT,
       pendingRewardsBCC: rewardSummary.pendingBCC,
-      directReferrals: member.directSponsorCount,
+      directReferrals: actualDirectReferrals,
       teamSize,
       totalInflow: member.totalInflow,
       joinedAt: member.joinedAt,
@@ -124,6 +154,100 @@ memberRoutes.get("/tree", async (c) => {
 });
 
 /**
+ * Get member's matrix view (sponsor, current member, and 3 direct downlines)
+ * Accepts wallet address as query parameter (no auth required)
+ */
+memberRoutes.get("/matrix", async (c) => {
+  const walletAddress = c.req.query("address");
+  
+  if (!walletAddress) {
+    return c.json({ success: false, error: "Wallet address required" }, 400);
+  }
+
+  const address = walletAddress.toLowerCase();
+
+  // Get current member
+  const member = await db.query.members.findFirst({
+    where: eq(members.walletAddress, address),
+  });
+
+  if (!member) {
+    return c.json({ success: false, error: "Member not found" }, 404);
+  }
+
+  // Get sponsor (parent in placement)
+  let sponsor = null;
+  let sponsorPosition = null;
+  const [placementRecord] = await db
+    .select()
+    .from(placements)
+    .where(eq(placements.childId, member.id))
+    .limit(1);
+
+  if (placementRecord) {
+    sponsor = await db.query.members.findFirst({
+      where: eq(members.id, placementRecord.parentId),
+    });
+    sponsorPosition = placementRecord.position;
+  }
+
+  // Get direct children (downlines) - positions 1, 2, 3
+  const childPlacements = await db
+    .select({
+      childId: placements.childId,
+      position: placements.position,
+    })
+    .from(placements)
+    .where(eq(placements.parentId, member.id))
+    .orderBy(asc(placements.position));
+
+  const downlines: Array<{
+    position: number;
+    member: typeof member | null;
+  }> = [];
+
+  // Fill in downlines for positions 1, 2, 3
+  for (let pos = 1; pos <= 3; pos++) {
+    const childPlacement = childPlacements.find(cp => cp.position === pos);
+    if (childPlacement) {
+      const childMember = await db.query.members.findFirst({
+        where: eq(members.id, childPlacement.childId),
+      });
+      downlines.push({
+        position: pos,
+        member: childMember || null,
+      });
+    } else {
+      downlines.push({
+        position: pos,
+        member: null,
+      });
+    }
+  }
+
+  return c.json({
+    success: true,
+    data: {
+      member: {
+        id: member.id,
+        walletAddress: member.walletAddress,
+        username: member.username,
+        currentLevel: member.currentLevel,
+        joinedAt: member.joinedAt,
+      },
+      sponsor: sponsor ? {
+        id: sponsor.id,
+        walletAddress: sponsor.walletAddress,
+        username: sponsor.username,
+        currentLevel: sponsor.currentLevel,
+        position: sponsorPosition,
+      } : null,
+      downlines,
+    },
+  });
+});
+
+/**
  * Get layer statistics
  */
 memberRoutes.get("/layers", async (c) => {
@@ -162,29 +286,59 @@ memberRoutes.get("/layers", async (c) => {
 });
 
 /**
- * Get reward history
+ * Get reward history and overview (no auth required - accepts wallet address)
  */
 memberRoutes.get("/rewards", async (c) => {
-  const user = c.get("user");
+  const walletAddress = c.req.query("address");
+  const authHeader = c.req.header("Authorization");
   const page = parseInt(c.req.query("page") || "1");
   const limit = parseInt(c.req.query("limit") || "20");
   const offset = (page - 1) * limit;
+  
+  let address: string | undefined;
+  
+  if (walletAddress) {
+    // Public access via query parameter
+    address = walletAddress.toLowerCase();
+  } else if (authHeader?.startsWith("Bearer ")) {
+    // Authenticated access via JWT token
+    const token = authHeader.substring(7);
+    const { verifyToken } = await import("../lib/jwt");
+    const payload = await verifyToken(token);
+    if (payload) {
+      address = payload.walletAddress;
+    }
+  }
+  
+  if (!address) {
+    return c.json({ success: false, error: "Wallet address required" }, 400);
+  }
 
   const allRewards = await db
     .select()
     .from(rewards)
-    .where(eq(rewards.recipientWallet, user.walletAddress))
+    .where(eq(rewards.recipientWallet, address))
     .orderBy(desc(rewards.createdAt))
     .limit(limit)
     .offset(offset);
 
-  const summary = await rewardService.getRewardSummary(user.walletAddress);
+  const summary = await rewardService.getRewardSummary(address);
+
+  // Calculate totals
+  const totalEarned = parseFloat(summary.totalDirectSponsor) + parseFloat(summary.totalLayerPayout);
+  const totalWithdrawn = parseFloat(summary.claimedUSDT || "0");
+  const claimable = parseFloat(summary.pendingUSDT || "0");
 
   return c.json({
     success: true,
     data: {
       rewards: allRewards,
-      summary,
+      summary: {
+        ...summary,
+        totalEarned: totalEarned.toString(),
+        totalWithdrawn: totalWithdrawn.toString(),
+        claimable: claimable.toString(),
+      },
       page,
       limit,
     },
@@ -223,7 +377,7 @@ memberRoutes.get("/referral", async (c) => {
     success: true,
     data: {
       referralCode: member.walletAddress,
-      directReferralCount: member.directSponsorCount,
+      directReferralCount: directReferrals.length,
       directReferrals,
     },
   });

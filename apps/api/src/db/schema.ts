@@ -359,6 +359,7 @@ export const newsTranslations = mysqlTable("news_translations", {
   articleId: int("article_id").notNull(),
   language: varchar("language", { length: 10 }).notNull(), // en, cn, jp, ms, etc.
   title: varchar("title", { length: 500 }).notNull(),
+  description: text("description"), // Optional description field
   content: text("content").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),

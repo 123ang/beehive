@@ -13,6 +13,8 @@ import {
   LogOut,
   Globe,
   Shield,
+  Network,
+  Menu,
 } from "lucide-react";
 import { useTranslation } from "@/i18n/TranslationProvider";
 
@@ -23,7 +25,6 @@ interface AdminLayoutProps {
 const languages = [
   { code: "en", name: "English", flag: "🇺🇸" },
   { code: "zh-CN", name: "简体中文", flag: "🇨🇳" },
-  { code: "zh-TW", name: "繁體中文", flag: "🇭🇰" },
 ];
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
@@ -31,6 +32,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const pathname = usePathname();
   const { lang, setLang, t } = useTranslation();
   const [langMenuOpen, setLangMenuOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const handleLogout = () => {
     localStorage.removeItem("adminToken");
@@ -79,14 +81,23 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       icon: Shield,
       path: "/admin/admins",
     },
+    {
+      label: t("admin.nav.matrix") || "3x3 Matrix",
+      icon: Network,
+      path: "/admin/matrix",
+    },
   ];
 
   const currentLang = languages.find((l) => l.code === lang) || languages[0];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex">
-      {/* Sidebar - Fixed on Left */}
-      <aside className="fixed left-0 top-0 h-screen w-64 bg-glass border-r border-white/10 flex-shrink-0 z-30">
+      {/* Sidebar - Drawer */}
+      <aside
+        className={`fixed left-0 top-0 h-screen w-64 bg-glass border-r border-white/10 flex-shrink-0 z-30 transition-transform duration-300 ease-in-out ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
         <div className="h-full flex flex-col">
           {/* Sidebar Header */}
           <div className="p-4 border-b border-white/10">
@@ -96,7 +107,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+          <nav className="flex-1 p-4 space-y-2 overflow-y-auto pb-2">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.path;
@@ -118,7 +129,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           </nav>
 
           {/* Language Switcher */}
-          <div className="p-4 border-t border-white/10">
+          <div className="p-4 border-t border-white/10 relative z-50">
             <div className="relative">
               <button
                 onClick={() => setLangMenuOpen(!langMenuOpen)}
@@ -132,10 +143,10 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               {langMenuOpen && (
                 <>
                   <div
-                    className="fixed inset-0 z-10"
+                    className="fixed inset-0 z-40"
                     onClick={() => setLangMenuOpen(false)}
                   />
-                  <div className="absolute bottom-full left-0 right-0 mb-2 bg-glass border border-white/10 rounded-lg overflow-hidden z-20">
+                  <div className="absolute bottom-full left-0 right-0 mb-2 w-full bg-glass border border-white/10 rounded-lg overflow-hidden z-[60] shadow-xl">
                     {languages.map((language) => (
                       <button
                         key={language.code}
@@ -173,14 +184,24 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       </aside>
 
       {/* Main Content - Offset for Fixed Sidebar */}
-      <div className="flex-1 flex flex-col overflow-hidden ml-64">
+      <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${
+        sidebarOpen ? "lg:ml-64" : "lg:ml-0"
+      }`}>
         {/* Top Header */}
         <div className="bg-glass border-b border-white/10">
           <div className="px-4 sm:px-6 lg:px-8 py-4">
             <div className="flex items-center justify-between">
-              <h1 className="text-2xl font-bold text-white">
-                {navItems.find((item) => item.path === pathname)?.label || "Dashboard"}
-              </h1>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setSidebarOpen(!sidebarOpen)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <Menu className="w-6 h-6" />
+                </button>
+                <h1 className="text-2xl font-bold text-white">
+                  {navItems.find((item) => item.path === pathname)?.label || "Dashboard"}
+                </h1>
+              </div>
             </div>
           </div>
         </div>
@@ -190,6 +211,14 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           {children}
         </div>
       </div>
+
+      {/* Overlay for mobile */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-20 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
     </div>
   );
 }

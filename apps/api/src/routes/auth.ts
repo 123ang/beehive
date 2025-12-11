@@ -33,17 +33,24 @@ authRoutes.post("/nonce", authRateLimit, zValidator("json", nonceSchema), async 
 
   const nonce = generateNonce();
 
-  // Upsert user with new nonce
-  await db
-    .insert(users)
-    .values({
+  // Check if user exists
+  const existingUser = await db.query.users.findFirst({
+    where: eq(users.walletAddress, normalizedAddress),
+  });
+
+  if (existingUser) {
+    // Update existing user
+    await db
+      .update(users)
+      .set({ nonce, updatedAt: new Date() })
+      .where(eq(users.walletAddress, normalizedAddress));
+  } else {
+    // Insert new user
+    await db.insert(users).values({
       walletAddress: normalizedAddress,
       nonce,
-    })
-    .onConflictDoUpdate({
-      target: users.walletAddress,
-      set: { nonce, updatedAt: new Date() },
     });
+  }
 
   // Create SIWE message
   const message = `Welcome to Beehive!

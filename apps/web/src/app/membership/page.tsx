@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useAccount } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { MEMBERSHIP_LEVELS } from "@beehive/shared";
 import { getLevelColor, formatNumber } from "@/lib/utils";
 import { useTranslation } from "@/i18n/TranslationProvider";
+import { api } from "@/lib/api";
 import { Crown, Star, Gem, Award, Check, Lock, ArrowRight } from "lucide-react";
 
 // Level tier categories
@@ -29,7 +30,33 @@ export default function MembershipPage() {
   const { isConnected, address } = useAccount();
   const { t } = useTranslation();
   const [selectedLevel, setSelectedLevel] = useState<number | null>(null);
-  const [currentUserLevel] = useState(0); // TODO: Fetch from contract
+  const [currentUserLevel, setCurrentUserLevel] = useState<number>(0);
+  const [isLoadingLevel, setIsLoadingLevel] = useState(false);
+
+  // Fetch user's current level when wallet is connected
+  useEffect(() => {
+    const fetchUserLevel = async () => {
+      if (!isConnected || !address) {
+        setCurrentUserLevel(0);
+        return;
+      }
+
+      setIsLoadingLevel(true);
+      try {
+        const response = await api.getDashboard(address);
+        if (response.success && response.data) {
+          setCurrentUserLevel(response.data.currentLevel || 0);
+        }
+      } catch (error) {
+        console.error("Failed to fetch user level:", error);
+        setCurrentUserLevel(0);
+      } finally {
+        setIsLoadingLevel(false);
+      }
+    };
+
+    fetchUserLevel();
+  }, [isConnected, address]);
 
   const handlePurchase = async (level: number) => {
     if (!isConnected) return;
@@ -80,7 +107,8 @@ export default function MembershipPage() {
                   if (!level) return null;
 
                   const isOwned = currentUserLevel >= level.level;
-                  const canPurchase = isConnected && !isOwned;
+                  const isDisabled = isConnected && level.level <= currentUserLevel;
+                  const canPurchase = isConnected && !isOwned && !isDisabled;
                   const isNext = currentUserLevel + 1 === level.level;
                   const isLevel1 = level.level === 1;
 
@@ -91,7 +119,7 @@ export default function MembershipPage() {
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.5, delay: index * 0.1 }}
                       className={`level-card ${isOwned ? "active" : ""} ${
-                        !canPurchase && !isOwned ? "locked" : ""
+                        (isDisabled || (!canPurchase && !isOwned)) ? "locked" : ""
                       }`}
                     >
                       {/* Status Badge */}
@@ -178,13 +206,19 @@ export default function MembershipPage() {
                           <Button
                             className="w-full group"
                             onClick={() => handlePurchase(level.level)}
-                            disabled={!canPurchase}
+                            disabled={!canPurchase || isDisabled}
                           >
-                            {isConnected ? t("membership.purchase") : t("membership.connectWalletButton")}
-                            <ArrowRight
-                              size={16}
-                              className="group-hover:translate-x-1 transition-transform"
-                            />
+                            {isDisabled
+                              ? t("membership.owned")
+                              : isConnected
+                              ? t("membership.purchase")
+                              : t("membership.connectWalletButton")}
+                            {!isDisabled && (
+                              <ArrowRight
+                                size={16}
+                                className="group-hover:translate-x-1 transition-transform"
+                              />
+                            )}
                           </Button>
                         )}
                       </div>

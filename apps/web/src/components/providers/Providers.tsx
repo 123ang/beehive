@@ -7,6 +7,7 @@ import { config } from "@/lib/wagmi";
 import "@rainbow-me/rainbowkit/styles.css";
 import { useState } from "react";
 import { TranslationProvider } from "@/i18n/TranslationProvider";
+import { WalletRedirect } from "@/components/web3/WalletRedirect";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -34,7 +35,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
           })}
           modalSize="compact"
         >
-          <TranslationProvider>{children}</TranslationProvider>
+          <TranslationProvider>
+            <WalletRedirect />
+            {children}
+          </TranslationProvider>
         </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>

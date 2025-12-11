@@ -34,8 +34,13 @@ export async function logActivity(data: ActivityLogData) {
  */
 export function getClientIp(headers: Headers): string | undefined {
   return (
-    headers.get("x-forwarded-for")?.split(",")[0] ||
+    headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
     headers.get("x-real-ip") ||
+    headers.get("cf-connecting-ip") ||
+    headers.get("x-client-ip") ||
+    headers.get("fastly-client-ip") ||
+    headers.get("true-client-ip") ||
+    headers.get("forwarded")?.match(/for="?([^;"]+)"?/)?.[1] ||
     undefined
   );
 }

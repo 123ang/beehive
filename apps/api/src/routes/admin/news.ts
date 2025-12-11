@@ -27,7 +27,7 @@ adminNewsRouter.get("/", requirePermission("news.create"), async (c) => {
         ...article,
         translations: translations.reduce((acc, t) => ({
           ...acc,
-          [t.language]: { title: t.title, content: t.content }
+          [t.language]: { title: t.title, description: t.description || null, content: t.content }
         }), {})
       };
     })
@@ -62,7 +62,7 @@ adminNewsRouter.get("/:id", requirePermission("news.create"), async (c) => {
       ...article,
       translations: translations.reduce((acc, t) => ({
         ...acc,
-        [t.language]: { title: t.title, content: t.content }
+        [t.language]: { title: t.title, description: t.description || null, content: t.content }
       }), {})
     }
   });
@@ -95,6 +95,7 @@ adminNewsRouter.post("/", requirePermission("news.create"), async (c) => {
         articleId: article.id,
         language: lang,
         title: content.title,
+        description: content.description || null,
         content: content.content,
       });
     }
@@ -140,13 +141,18 @@ adminNewsRouter.put("/:id", requirePermission("news.update"), async (c) => {
       if (existing) {
         await db
           .update(newsTranslations)
-          .set({ title: content.title, content: content.content })
+          .set({ 
+            title: content.title, 
+            description: content.description || null,
+            content: content.content 
+          })
           .where(eq(newsTranslations.id, existing.id));
       } else {
         await db.insert(newsTranslations).values({
           articleId: id,
           language: lang,
           title: content.title,
+          description: content.description || null,
           content: content.content,
         });
       }
