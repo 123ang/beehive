@@ -70,11 +70,13 @@ const getDbConfig = () => {
   if (databaseUrl) {
     try {
       const url = new URL(databaseUrl);
+      // Manually decode password - %40 needs to become @
+      const password = decodeURIComponent(url.password || "");
       return {
         host: url.hostname,
         port: parseInt(url.port) || 3306,
         user: url.username,
-        password: url.password,
+        password: password, // Decoded: "920214@Ang"
         database: url.pathname.slice(1),
       };
     } catch (error) {

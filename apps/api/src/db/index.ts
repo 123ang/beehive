@@ -21,19 +21,15 @@ if (process.env.NODE_ENV !== "production") {
 // Parse connection string
 function parseConnectionString(url: string) {
   const parsed = new URL(url);
-  // URL automatically decodes %40 to @, so password should be correct
-  const password = parsed.password; // This will be "920214@Ang" if URL had "920214%40Ang"
-  
-  // Debug logging (remove in production)
-  if (process.env.NODE_ENV !== "production") {
-    console.log(`🔍 Parsed password: "${password}" (length: ${password?.length || 0})`);
-  }
+  // Manually decode password - URL parser may not decode it automatically
+  // %40 needs to be decoded to @
+  const password = decodeURIComponent(parsed.password || "");
   
   return {
     host: parsed.hostname,
     port: parseInt(parsed.port) || 3306,
     user: parsed.username,
-    password: password,
+    password: password, // Now correctly decoded: "920214@Ang"
     database: parsed.pathname.slice(1),
   };
 }

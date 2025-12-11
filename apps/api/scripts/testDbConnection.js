@@ -46,11 +46,14 @@ console.log("DATABASE_URL:", databaseUrl.replace(/:[^:@]+@/, ":****@")); // Hide
 // Parse connection string
 function parseConnectionString(url) {
   const parsed = new URL(url);
+  // Manually decode password in case URL parser doesn't decode it
+  const password = decodeURIComponent(parsed.password || "");
+  
   return {
     host: parsed.hostname,
     port: parseInt(parsed.port) || 3306,
     user: parsed.username,
-    password: parsed.password, // URL automatically decodes %40 to @
+    password: password, // Decoded: %40 becomes @
     database: parsed.pathname.slice(1),
   };
 }
