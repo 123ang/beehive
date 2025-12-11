@@ -13,6 +13,7 @@
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx src/scripts/seed.ts",
     "create-admin": "node scripts/createAdmin.js",
+    "test-db": "node scripts/testDbConnection.js",
     "db:update-levels": "tsx src/scripts/updateMemberLevels.ts",
     "db:build-tree": "tsx src/scripts/buildTreeFromCSV.ts",
     "clean": "rimraf dist"

@@ -21,11 +21,14 @@ if (process.env.NODE_ENV !== "production") {
 // Parse connection string
 function parseConnectionString(url: string) {
   const parsed = new URL(url);
+  // URL automatically decodes %40 to @, so password should be correct
+  const password = parsed.password; // This will be "920214@Ang" if URL had "920214%40Ang"
+  
   return {
     host: parsed.hostname,
     port: parseInt(parsed.port) || 3306,
     user: parsed.username,
-    password: parsed.password,
+    password: password,
     database: parsed.pathname.slice(1),
   };
 }
