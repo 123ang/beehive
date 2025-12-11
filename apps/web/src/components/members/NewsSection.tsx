@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Newspaper, Calendar, ArrowRight } from "lucide-react";
 import { useTranslation } from "@/i18n/TranslationProvider";
+import { getApiEndpoint } from "@/lib/apiUrl";
 
 interface NewsArticle {
   id: number;
@@ -24,8 +25,9 @@ export function NewsSection() {
 
   const fetchNews = async () => {
     try {
+      setLoading(true);
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/members/news?lang=${lang}`
+        `${getApiEndpoint(`members/news?lang=${lang}`)}`
       );
       const data = await response.json();
       if (data.success) {

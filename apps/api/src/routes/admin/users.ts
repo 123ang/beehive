@@ -1,11 +1,12 @@
 import { Hono } from "hono";
 import { db } from "../../db";
-import { users, members, bulkImportBatches, referralRelationships } from "../../db/schema";
-import { eq, desc, like, or, sql, and, count } from "drizzle-orm";
+import { users, members, bulkImportBatches, referralRelationships, placements, memberClosure } from "../../db/schema";
+import { eq, desc, asc, like, or, sql, and, count } from "drizzle-orm";
 import { adminAuth, requirePermission } from "../../middleware/adminAuth";
 import { logActivity, getClientIp, getUserAgent } from "../../utils/activityLogger";
 import { parseFile, isValidWalletAddress } from "../../utils/csvParser";
 import { generateMemberId, generateReferralCode } from "../../utils/referralCode";
+import { createMemberWithPlacement } from "../../utils/memberPlacement";
 
 const adminUsersRouter = new Hono();
 
@@ -26,14 +27,12 @@ adminUsersRouter.get("/members", requirePermission("user.list"), async (c) => {
 
     let query = db.select().from(members);
 
-    // Apply search filter
+    // Apply search filter (only by wallet address, case-insensitive)
     const conditions = [];
     if (search) {
+      const searchLower = search.toLowerCase();
       conditions.push(
-        or(
-          like(members.walletAddress, `%${search}%`),
-          like(members.username, `%${search}%`)
-        )
+        sql`LOWER(${members.walletAddress}) LIKE ${`%${searchLower}%`}`
       );
     }
 
@@ -42,7 +41,7 @@ adminUsersRouter.get("/members", requirePermission("user.list"), async (c) => {
     }
 
     const membersList = await query
-      .orderBy(desc(members.joinedAt))
+      .orderBy(asc(members.id))
       .limit(limitNum)
       .offset(offset);
 
@@ -115,6 +114,103 @@ adminUsersRouter.get("/members/:id", requirePermission("user.view"), async (c) =
 });
 
 /**
+ * Get member's matrix info (sponsor and direct children)
+ * GET /api/admin/users/members/:id/matrix
+ */
+adminUsersRouter.get("/members/:id/matrix", requirePermission("user.view"), async (c) => {
+  try {
+    const memberId = parseInt(c.req.param("id"));
+    
+    if (isNaN(memberId)) {
+      return c.json({ error: "Invalid member ID" }, 400);
+    }
+
+    // Get member
+    const [member] = await db
+      .select()
+      .from(members)
+      .where(eq(members.id, memberId))
+      .limit(1);
+
+    if (!member) {
+      return c.json({ error: "Member not found" }, 404);
+    }
+
+    // Get sponsor (parent in placement)
+    let sponsor = null;
+    let sponsorPosition = null;
+    const [placementRecord] = await db
+      .select()
+      .from(placements)
+      .where(eq(placements.childId, memberId))
+      .limit(1);
+
+    if (placementRecord) {
+      const [sponsorMember] = await db
+        .select()
+        .from(members)
+        .where(eq(members.id, placementRecord.parentId))
+        .limit(1);
+      sponsor = sponsorMember || null;
+      sponsorPosition = placementRecord.position;
+    }
+
+    // Get direct children (downlines)
+    const childPlacements = await db
+      .select({
+        childId: placements.childId,
+        position: placements.position,
+      })
+      .from(placements)
+      .where(eq(placements.parentId, memberId))
+      .orderBy(asc(placements.position));
+
+    const children: Array<{
+      position: number;
+      member: typeof member | null;
+    }> = [];
+
+    // Fill in children for positions 1, 2, 3
+    for (let pos = 1; pos <= 3; pos++) {
+      const childPlacement = childPlacements.find(cp => cp.position === pos);
+      if (childPlacement) {
+        const [childMember] = await db
+          .select()
+          .from(members)
+          .where(eq(members.id, childPlacement.childId))
+          .limit(1);
+        children.push({
+          position: pos,
+          member: childMember || null,
+        });
+      } else {
+        children.push({
+          position: pos,
+          member: null,
+        });
+      }
+    }
+
+    // Check if this member is a root (has no parent placement)
+    const isRoot = !placementRecord;
+
+    return c.json({
+      success: true,
+      data: {
+        member,
+        isRoot,
+        sponsor,
+        sponsorPosition,
+        children,
+      },
+    });
+  } catch (error) {
+    console.error("Get member matrix error:", error);
+    return c.json({ error: "Internal server error" }, 500);
+  }
+});
+
+/**
  * Update member details
  * PUT /api/admin/users/members/:id
  */
@@ -122,7 +218,7 @@ adminUsersRouter.put("/members/:id", requirePermission("user.modify_address"), a
   try {
     const admin = c.get("admin");
     const memberId = parseInt(c.req.param("id"));
-    const { walletAddress, username } = await c.req.json();
+    const { walletAddress } = await c.req.json();
 
     if (isNaN(memberId)) {
       return c.json({ error: "Invalid member ID" }, 400);
@@ -143,9 +239,6 @@ adminUsersRouter.put("/members/:id", requirePermission("user.modify_address"), a
     const updateData: any = {};
     if (walletAddress !== undefined) {
       updateData.walletAddress = walletAddress.toLowerCase();
-    }
-    if (username !== undefined) {
-      updateData.username = username || null;
     }
 
     await db.update(members).set(updateData).where(eq(members.id, memberId));
@@ -325,9 +418,10 @@ adminUsersRouter.post("/bulk-import", requirePermission("user.bulk_import"), asy
       duplicates: [] as any[],
     };
 
-    // Process each row
+    // Process each row - create members with matrix placement
     for (const row of rows) {
       const walletAddress = row.wallet_address?.trim();
+      const referrerWallet = row.referrer_wallet?.trim();
 
       // Validate wallet address
       if (!isValidWalletAddress(walletAddress)) {
@@ -338,48 +432,121 @@ adminUsersRouter.post("/bulk-import", requirePermission("user.bulk_import"), asy
         continue;
       }
 
-      // Check if user already exists
-      const [existingUser] = await db
+      // Validate referrer wallet if provided
+      if (referrerWallet && !isValidWalletAddress(referrerWallet)) {
+        results.failed.push({
+          address: walletAddress,
+          reason: "Invalid referrer wallet address format",
+        });
+        continue;
+      }
+
+      // Check if member already exists
+      const [existingMember] = await db
         .select()
-        .from(users)
-        .where(eq(users.walletAddress, walletAddress.toLowerCase()))
+        .from(members)
+        .where(eq(members.walletAddress, walletAddress.toLowerCase()))
         .limit(1);
 
-      if (existingUser) {
+      if (existingMember) {
         results.duplicates.push({ address: walletAddress });
         continue;
       }
 
-      // Create user as Level 1 member
+      // Create member with matrix placement
       try {
-        const [newUser] = await db
-          .insert(users)
-          .values({
-            walletAddress: walletAddress.toLowerCase(),
-            email: row.email || null,
-            name: row.name || null,
-            phone: row.phone || null,
-            membershipLevel: 1,
-            status: "active",
-            isBulkImported: true,
-            bulkImportId: importBatch.id,
-          })
-          .$returningId();
+        // Handle referrer - if not provided or not found, find root member
+        let actualReferrerWallet = referrerWallet;
+        
+        if (!actualReferrerWallet) {
+          // Find the first member (root) to use as default referrer
+          const [rootMember] = await db
+            .select()
+            .from(members)
+            .orderBy(members.joinedAt)
+            .limit(1);
+          
+          if (rootMember) {
+            actualReferrerWallet = rootMember.walletAddress;
+          } else {
+            // No members exist yet - this will be the first member (root)
+            // We'll create it without a sponsor
+            throw new Error("No root member found. Please import a root member first or provide a referrer_wallet.");
+          }
+        }
 
-        // Generate member ID and referral code
-        const memberId = generateMemberId(newUser.id);
-        const referralCode = generateReferralCode(memberId);
+        // Verify referrer exists
+        const [referrerMember] = await db
+          .select()
+          .from(members)
+          .where(eq(members.walletAddress, actualReferrerWallet.toLowerCase()))
+          .limit(1);
 
-        await db
-          .update(users)
-          .set({ memberId, referralCode })
-          .where(eq(users.id, newUser.id));
+        if (!referrerMember) {
+          results.failed.push({
+            address: walletAddress,
+            reason: `Referrer not found: ${actualReferrerWallet}`,
+          });
+          continue;
+        }
+
+        // Create member and place in 3x3 matrix
+        const { memberId, placement } = await createMemberWithPlacement(
+          walletAddress,
+          1, // Level 1
+          actualReferrerWallet, // Use referrer from CSV or root member
+          row.username || undefined
+        );
+
+        // Also create/update user record for consistency
+        const [existingUser] = await db
+          .select()
+          .from(users)
+          .where(eq(users.walletAddress, walletAddress.toLowerCase()))
+          .limit(1);
+
+        if (existingUser) {
+          // Update existing user
+          const userMemberId = generateMemberId(existingUser.id);
+          const referralCode = generateReferralCode(userMemberId);
+          await db
+            .update(users)
+            .set({
+              memberId: userMemberId,
+              referralCode,
+              membershipLevel: 1,
+              isBulkImported: true,
+              bulkImportId: importBatch.id,
+            })
+            .where(eq(users.id, existingUser.id));
+        } else {
+          // Create new user record
+          const userMemberId = generateMemberId(memberId);
+          const referralCode = generateReferralCode(userMemberId);
+          await db
+            .insert(users)
+            .values({
+              walletAddress: walletAddress.toLowerCase(),
+              email: row.email || null,
+              name: row.name || null,
+              phone: row.phone || null,
+              membershipLevel: 1,
+              status: "active",
+              memberId: userMemberId,
+              referralCode,
+              isBulkImported: true,
+              bulkImportId: importBatch.id,
+            });
+        }
 
         results.successful.push({
           address: walletAddress,
-          userId: newUser.id,
           memberId,
-          referralCode,
+          referrerWallet: referrerWallet || null,
+          placement: placement ? {
+            parentId: placement.parentId,
+            position: placement.position,
+          } : null,
         });
 
         // Log activity
@@ -388,17 +555,22 @@ adminUsersRouter.post("/bulk-import", requirePermission("user.bulk_import"), asy
           actorId: admin.adminId.toString(),
           action: "admin.bulk_import_user",
           metadata: {
-            userId: newUser.id,
+            memberId,
             walletAddress,
+            referrerWallet: referrerWallet || null,
+            placement: placement ? {
+              parentId: placement.parentId,
+              position: placement.position,
+            } : null,
             importId: importBatch.id,
           },
           ipAddress: getClientIp(c.req.raw.headers),
           userAgent: getUserAgent(c.req.raw.headers),
         });
-      } catch (error) {
+      } catch (error: any) {
         results.failed.push({
           address: walletAddress,
-          reason: error.message,
+          reason: error.message || "Failed to create member",
         });
       }
     }

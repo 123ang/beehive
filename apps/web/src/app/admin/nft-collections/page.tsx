@@ -50,7 +50,7 @@ export default function AdminNFTCollectionsPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (!response.ok) throw new Error("Failed to fetch collections");
+      if (!response.ok) throw new Error(t("admin.errors.failedToFetch"));
       const result = await response.json();
       setCollections(result.data || []);
     } catch (error) {
@@ -87,7 +87,7 @@ export default function AdminNFTCollectionsPage() {
         }),
       });
 
-      if (!response.ok) throw new Error("Failed to save collection");
+      if (!response.ok) throw new Error(t("admin.errors.failedToSave"));
       setShowModal(false);
       setEditingCollection(null);
       setFormData({
@@ -101,12 +101,12 @@ export default function AdminNFTCollectionsPage() {
       fetchCollections(token);
     } catch (error) {
       console.error("Error saving collection:", error);
-      alert("Failed to save collection");
+      alert(t("admin.errors.failedToSave"));
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("Are you sure you want to delete this collection?")) return;
+    if (!confirm(t("admin.confirm.deleteCollection"))) return;
     const token = localStorage.getItem("adminToken");
     if (!token) return;
 
@@ -116,11 +116,11 @@ export default function AdminNFTCollectionsPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (!response.ok) throw new Error("Failed to delete collection");
+      if (!response.ok) throw new Error(t("admin.errors.failedToDelete"));
       fetchCollections(token);
     } catch (error) {
       console.error("Error deleting collection:", error);
-      alert("Failed to delete collection");
+      alert(t("admin.errors.failedToDelete"));
     }
   };
 
@@ -141,7 +141,7 @@ export default function AdminNFTCollectionsPage() {
     return (
       <AdminLayout>
         <div className="flex items-center justify-center h-64">
-          <div className="text-white">Loading...</div>
+          <div className="text-white">{t("admin.errors.loading")}</div>
         </div>
       </AdminLayout>
     );
@@ -191,7 +191,7 @@ export default function AdminNFTCollectionsPage() {
               </p>
               <div className="space-y-2 mb-4">
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">Minted:</span>
+                  <span className="text-gray-400">{t("admin.nft.minted")}:</span>
                   <span className="text-white">
                     {collection.minted} / {collection.maxSupply}
                   </span>
@@ -211,7 +211,7 @@ export default function AdminNFTCollectionsPage() {
                       : "bg-gray-500/20 text-gray-400"
                   }`}
                 >
-                  {collection.active ? "Active" : "Inactive"}
+                  {collection.active ? t("admin.admins.status.active") : t("admin.admins.status.inactive")}
                 </span>
                 <div className="flex gap-2">
                   <button
@@ -242,41 +242,41 @@ export default function AdminNFTCollectionsPage() {
               </h3>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-white mb-2">Short Name</label>
+                  <label className="block text-white mb-2">{t("admin.nft.shortName")}</label>
                   <input
                     type="text"
                     value={formData.shortName}
                     onChange={(e) => setFormData({ ...formData, shortName: e.target.value })}
                     className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white"
-                    placeholder="e.g., WARRIOR, BRONZE"
+                    placeholder={t("admin.nft.shortNamePlaceholder")}
                     required
                   />
-                  <p className="text-xs text-gray-400 mt-1">Unique identifier for the collection</p>
+                  <p className="text-xs text-gray-400 mt-1">{t("admin.nft.shortNameHint")}</p>
                 </div>
                 <div>
-                  <label className="block text-white mb-2">Name</label>
+                  <label className="block text-white mb-2">{t("admin.nft.name")}</label>
                   <input
                     type="text"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white"
-                    placeholder="e.g., Warrior Level NFT"
+                    placeholder={t("admin.nft.namePlaceholder")}
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-white mb-2">Description</label>
+                  <label className="block text-white mb-2">{t("admin.nft.description")}</label>
                   <textarea
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white"
                     rows={4}
-                    placeholder="Describe this NFT collection..."
+                    placeholder={t("admin.nft.descriptionPlaceholder")}
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-white mb-2">Max Supply</label>
+                    <label className="block text-white mb-2">{t("admin.nft.maxSupply")}</label>
                     <input
                       type="number"
                       value={formData.maxSupply}
@@ -289,7 +289,7 @@ export default function AdminNFTCollectionsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-white mb-2">Price (BCC)</label>
+                    <label className="block text-white mb-2">{t("admin.nft.priceBcc")}</label>
                     <input
                       type="number"
                       step="0.000001"
@@ -311,7 +311,7 @@ export default function AdminNFTCollectionsPage() {
                     className="w-4 h-4"
                   />
                   <label htmlFor="active" className="text-white">
-                    Active
+                    {t("admin.nft.active")}
                   </label>
                 </div>
                 <div className="flex gap-4">
@@ -319,7 +319,7 @@ export default function AdminNFTCollectionsPage() {
                     type="submit"
                     className="flex-1 px-4 py-2 bg-honey-500 hover:bg-honey-600 text-black font-semibold rounded-lg"
                   >
-                    {editingCollection ? "Update" : "Create"}
+                    {editingCollection ? t("admin.messages.update") : t("admin.messages.create")}
                   </button>
                   <button
                     type="button"
@@ -329,7 +329,7 @@ export default function AdminNFTCollectionsPage() {
                     }}
                     className="flex-1 px-4 py-2 bg-white/5 hover:bg-white/10 text-white rounded-lg"
                   >
-                    Cancel
+                    {t("admin.users.cancel")}
                   </button>
                 </div>
               </form>

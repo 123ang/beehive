@@ -73,7 +73,7 @@ export default function AdminClassesPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (!response.ok) throw new Error("Failed to fetch classes");
+      if (!response.ok) throw new Error(t("admin.errors.failedToFetch"));
       const result = await response.json();
       const classesWithMeetings = await Promise.all(
         (result.data || []).map(async (classItem: Class) => {
@@ -120,14 +120,14 @@ export default function AdminClassesPage() {
         body: JSON.stringify(classFormData),
       });
 
-      if (!response.ok) throw new Error("Failed to save class");
+      if (!response.ok) throw new Error(t("admin.errors.failedToSave"));
       setShowClassModal(false);
       setEditingClass(null);
       setClassFormData({ title: "", description: "", thumbnail: "", category: "", active: true });
       fetchClasses(token);
     } catch (error) {
       console.error("Error saving class:", error);
-      alert("Failed to save class");
+      alert(t("admin.errors.failedToSave"));
     }
   };
 
@@ -161,7 +161,7 @@ export default function AdminClassesPage() {
         }),
       });
 
-      if (!response.ok) throw new Error("Failed to save meeting");
+      if (!response.ok) throw new Error(t("admin.errors.failedToSave"));
       setShowMeetingModal(false);
       setEditingMeeting(null);
       setSelectedClassId(null);
@@ -178,12 +178,12 @@ export default function AdminClassesPage() {
       fetchClasses(token);
     } catch (error) {
       console.error("Error saving meeting:", error);
-      alert("Failed to save meeting");
+      alert(t("admin.errors.failedToSave"));
     }
   };
 
   const handleDeleteClass = async (id: number) => {
-    if (!confirm("Are you sure you want to delete this class?")) return;
+    if (!confirm(t("admin.confirm.deleteClass"))) return;
     const token = localStorage.getItem("adminToken");
     if (!token) return;
 
@@ -193,11 +193,11 @@ export default function AdminClassesPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (!response.ok) throw new Error("Failed to delete class");
+      if (!response.ok) throw new Error(t("admin.errors.failedToDelete"));
       fetchClasses(token);
     } catch (error) {
       console.error("Error deleting class:", error);
-      alert("Failed to delete class");
+      alert(t("admin.errors.failedToDelete"));
     }
   };
 
@@ -212,11 +212,11 @@ export default function AdminClassesPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (!response.ok) throw new Error("Failed to delete meeting");
+      if (!response.ok) throw new Error(t("admin.errors.failedToDelete"));
       fetchClasses(token);
     } catch (error) {
       console.error("Error deleting meeting:", error);
-      alert("Failed to delete meeting");
+      alert(t("admin.errors.failedToDelete"));
     }
   };
 
@@ -269,7 +269,7 @@ export default function AdminClassesPage() {
     return (
       <AdminLayout>
         <div className="flex items-center justify-center h-64">
-          <div className="text-white">Loading...</div>
+          <div className="text-white">{t("admin.errors.loading")}</div>
         </div>
       </AdminLayout>
     );

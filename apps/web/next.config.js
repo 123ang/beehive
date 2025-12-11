@@ -19,9 +19,8 @@ const nextConfig = {
       ];
     }
     // No API URL set or relative path - proxy to local API server
-    const defaultApiUrl = process.env.NODE_ENV === "production" 
-      ? "http://localhost:4001" 
-      : "http://localhost:4000";
+    // Use 4001 for both dev and production to match VPS
+    const defaultApiUrl = "http://localhost:4001";
     return [
       {
         source: "/api/:path*",

@@ -48,7 +48,7 @@ export default function AdminBulkImportPage() {
       setResult(data.data);
     } catch (error) {
       console.error("Upload error:", error);
-      alert("Failed to upload file");
+      alert(t("admin.errors.failedToUpload"));
     } finally {
       setUploading(false);
     }
@@ -58,21 +58,21 @@ export default function AdminBulkImportPage() {
     <AdminLayout>
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <h2 className="text-2xl font-bold text-white mb-6">
-          {t("admin.nav.bulkImport") || "Bulk Import Users"}
+          {t("admin.bulkImport.title")}
         </h2>
 
         <div className="bg-glass rounded-xl p-6 border border-white/10 mb-6">
-          <h3 className="text-lg font-semibold text-white mb-4">Upload CSV/Excel File</h3>
+          <h3 className="text-lg font-semibold text-white mb-4">{t("admin.bulkImport.title")}</h3>
           <p className="text-gray-400 mb-4">
-            Upload a CSV or Excel file containing wallet addresses. Each wallet will be registered as a Level 1 user.
+            {t("admin.bulkImport.description")}
           </p>
 
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-400 mb-2">
-              Required columns: wallet_address
+              {t("admin.bulkImport.requiredColumns")}
             </label>
             <label className="block text-sm font-medium text-gray-400 mb-4">
-              Optional columns: email, name, referrer_wallet
+              {t("admin.bulkImport.optionalColumns")}
             </label>
           </div>
 
@@ -90,9 +90,9 @@ export default function AdminBulkImportPage() {
             >
               <Upload className="w-12 h-12 text-gray-400 mb-4" />
               <p className="text-white mb-2">
-                {file ? file.name : "Click to upload or drag and drop"}
+                {file ? file.name : t("admin.bulkImport.uploadFile")}
               </p>
-              <p className="text-sm text-gray-400">CSV or Excel files only</p>
+              <p className="text-sm text-gray-400">{t("admin.bulkImport.fileTypes")}</p>
             </label>
           </div>
 
@@ -103,7 +103,7 @@ export default function AdminBulkImportPage() {
                 disabled={uploading}
                 className="px-6 py-3 bg-honey-500 hover:bg-honey-600 text-black font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {uploading ? "Uploading..." : "Upload & Import"}
+                {uploading ? t("admin.bulkImport.uploading") : t("admin.bulkImport.uploadImport")}
               </button>
             </div>
           )}
@@ -111,13 +111,13 @@ export default function AdminBulkImportPage() {
 
         {result && (
           <div className="bg-glass rounded-xl p-6 border border-white/10">
-            <h3 className="text-lg font-semibold text-white mb-4">Import Results</h3>
+            <h3 className="text-lg font-semibold text-white mb-4">{t("admin.bulkImport.importResults")}</h3>
             
             <div className="grid grid-cols-3 gap-4 mb-6">
               <div className="bg-green-500/10 rounded-lg p-4 border border-green-500/20">
                 <div className="flex items-center gap-2 mb-2">
                   <CheckCircle className="w-5 h-5 text-green-400" />
-                  <span className="text-sm text-gray-400">Successful</span>
+                  <span className="text-sm text-gray-400">{t("admin.bulkImport.successful")}</span>
                 </div>
                 <p className="text-2xl font-bold text-green-400">{result.successful || 0}</p>
               </div>
@@ -125,7 +125,7 @@ export default function AdminBulkImportPage() {
               <div className="bg-red-500/10 rounded-lg p-4 border border-red-500/20">
                 <div className="flex items-center gap-2 mb-2">
                   <XCircle className="w-5 h-5 text-red-400" />
-                  <span className="text-sm text-gray-400">Failed</span>
+                  <span className="text-sm text-gray-400">{t("admin.bulkImport.failed")}</span>
                 </div>
                 <p className="text-2xl font-bold text-red-400">{result.failed || 0}</p>
               </div>
@@ -133,7 +133,7 @@ export default function AdminBulkImportPage() {
               <div className="bg-yellow-500/10 rounded-lg p-4 border border-yellow-500/20">
                 <div className="flex items-center gap-2 mb-2">
                   <AlertCircle className="w-5 h-5 text-yellow-400" />
-                  <span className="text-sm text-gray-400">Total</span>
+                  <span className="text-sm text-gray-400">{t("admin.bulkImport.total")}</span>
                 </div>
                 <p className="text-2xl font-bold text-yellow-400">{result.total || 0}</p>
               </div>
@@ -141,7 +141,7 @@ export default function AdminBulkImportPage() {
 
             {result.errors && result.errors.length > 0 && (
               <div>
-                <h4 className="text-sm font-semibold text-white mb-2">Errors:</h4>
+                <h4 className="text-sm font-semibold text-white mb-2">{t("admin.bulkImport.errors")}</h4>
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   {result.errors.map((error: string, index: number) => (
                     <div key={index} className="text-sm text-red-400 bg-red-500/10 rounded p-2">

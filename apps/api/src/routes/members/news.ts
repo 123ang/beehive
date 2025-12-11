@@ -99,6 +99,7 @@ memberNewsRouter.get("/:id", async (c) => {
       return c.json({ error: "Article not found" }, 404);
     }
 
+    // Try to get translation for requested language
     const [translation] = await db
       .select()
       .from(newsTranslations)
@@ -110,12 +111,36 @@ memberNewsRouter.get("/:id", async (c) => {
       )
       .limit(1);
 
+    // Fallback to English if translation not found
+    if (!translation) {
+      const [enTranslation] = await db
+        .select()
+        .from(newsTranslations)
+        .where(
+          and(
+            eq(newsTranslations.articleId, id),
+            eq(newsTranslations.language, "en")
+          )
+        )
+        .limit(1);
+
+      return c.json({
+        success: true,
+        data: {
+          ...article,
+          title: enTranslation?.title || "Untitled",
+          content: enTranslation?.content || "",
+          language: "en",
+        },
+      });
+    }
+
     return c.json({
       success: true,
       data: {
         ...article,
-        title: translation?.title || "Untitled",
-        content: translation?.content || "",
+        title: translation.title,
+        content: translation.content,
         language: lang,
       },
     });

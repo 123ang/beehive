@@ -12,6 +12,7 @@ import {
   Activity,
 } from "lucide-react";
 import AdminLayout from "@/components/admin/AdminLayout";
+import { useTranslation } from "@/i18n/TranslationProvider";
 
 interface DashboardData {
   userMetrics: {
@@ -34,6 +35,7 @@ interface DashboardData {
 
 export default function AdminDashboardPage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -94,8 +96,8 @@ export default function AdminDashboardPage() {
       <AdminLayout>
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
-            <div className="text-white text-xl mb-2">Loading dashboard...</div>
-            <div className="text-gray-400 text-sm">Please wait</div>
+            <div className="text-white text-xl mb-2">{t("admin.dashboard.loading")}</div>
+            <div className="text-gray-400 text-sm">{t("admin.dashboard.pleaseWait")}</div>
           </div>
         </div>
       </AdminLayout>
@@ -107,9 +109,9 @@ export default function AdminDashboardPage() {
       <AdminLayout>
         <div className="flex items-center justify-center h-64">
           <div className="text-center max-w-md">
-            <div className="text-red-400 text-xl mb-4">Failed to load dashboard</div>
+            <div className="text-red-400 text-xl mb-4">{t("admin.errors.failedToFetch")}</div>
             <div className="text-gray-400 text-sm mb-4">
-              Please check if the API server is running on port 4000
+              {t("admin.errors.networkError")}
             </div>
             <button
               onClick={() => {
@@ -122,13 +124,13 @@ export default function AdminDashboardPage() {
               }}
               className="px-4 py-2 rounded-lg bg-honey-500 hover:bg-honey-600 text-black font-semibold"
             >
-              Retry
+              {t("admin.dashboard.retry")}
             </button>
             <button
               onClick={() => router.push("/admin/login")}
               className="ml-4 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white"
             >
-              Back to Login
+              {t("admin.dashboard.backToLogin")}
             </button>
           </div>
         </div>
@@ -138,37 +140,37 @@ export default function AdminDashboardPage() {
 
   const stats = [
     {
-      label: "Total Users",
+      label: t("admin.dashboard.totalUsers"),
       value: data?.userMetrics.totalUsers || 0,
       icon: Users,
       color: "blue",
     },
     {
-      label: "New Users",
+      label: t("admin.dashboard.newUsers"),
       value: data?.userMetrics.newUsers || 0,
       icon: UserPlus,
       color: "green",
     },
     {
-      label: "Active Users",
+      label: t("admin.dashboard.activeUsers"),
       value: data?.userMetrics.activeUsers || 0,
       icon: Activity,
       color: "purple",
     },
     {
-      label: "Total Revenue",
+      label: t("admin.dashboard.totalRevenue"),
       value: `$${(data?.revenueMetrics.totalEarnings || 0).toLocaleString()}`,
       icon: DollarSign,
       color: "yellow",
     },
     {
-      label: "Revenue This Month",
+      label: t("admin.dashboard.revenueThisMonth"),
       value: `$${(data?.revenueMetrics.earningsThisMonth || 0).toLocaleString()}`,
       icon: TrendingUp,
       color: "green",
     },
     {
-      label: "Total Rewards (BCC)",
+      label: t("admin.dashboard.totalRewards"),
       value: (data?.rewardsMetrics.totalRewardsReleased || 0).toLocaleString(),
       icon: Gift,
       color: "honey",

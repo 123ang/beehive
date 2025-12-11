@@ -158,14 +158,14 @@ export default function AdminAdminsPage() {
         body: JSON.stringify(adminForm),
       });
 
-      if (!response.ok) throw new Error("Failed to save admin");
+      if (!response.ok) throw new Error(t("admin.errors.failedToSave"));
       setShowAdminModal(false);
       setEditingAdmin(null);
       setAdminForm({ email: "", password: "", name: "", roleId: 0, active: true });
       fetchData(token);
     } catch (error) {
       console.error("Error saving admin:", error);
-      alert("Failed to save admin");
+      alert(t("admin.errors.failedToSave"));
     }
   };
 
@@ -189,19 +189,19 @@ export default function AdminAdminsPage() {
         body: JSON.stringify(roleForm),
       });
 
-      if (!response.ok) throw new Error("Failed to save role");
+      if (!response.ok) throw new Error(t("admin.errors.failedToSave"));
       setShowRoleModal(false);
       setEditingRole(null);
       setRoleForm({ name: "", description: "", isMasterAdmin: false, permissions: [] });
       fetchData(token);
     } catch (error) {
       console.error("Error saving role:", error);
-      alert("Failed to save role");
+      alert(t("admin.errors.failedToSave"));
     }
   };
 
   const handleDeleteAdmin = async (id: number) => {
-    if (!confirm("Are you sure you want to delete this admin?")) return;
+    if (!confirm(t("admin.confirm.deleteAdmin"))) return;
     const token = localStorage.getItem("adminToken");
     if (!token) return;
 
@@ -211,16 +211,16 @@ export default function AdminAdminsPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (!response.ok) throw new Error("Failed to delete admin");
+      if (!response.ok) throw new Error(t("admin.errors.failedToDelete"));
       fetchData(token);
     } catch (error) {
       console.error("Error deleting admin:", error);
-      alert("Failed to delete admin");
+      alert(t("admin.errors.failedToDelete"));
     }
   };
 
   const handleDeleteRole = async (id: number) => {
-    if (!confirm("Are you sure you want to delete this role?")) return;
+    if (!confirm(t("admin.confirm.deleteRole"))) return;
     const token = localStorage.getItem("adminToken");
     if (!token) return;
 
@@ -232,12 +232,12 @@ export default function AdminAdminsPage() {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || "Failed to delete role");
+        throw new Error(error.error || t("admin.errors.failedToDelete"));
       }
       fetchData(token);
     } catch (error: any) {
       console.error("Error deleting role:", error);
-      alert(error.message || "Failed to delete role");
+      alert(error.message || t("admin.errors.failedToDelete"));
     }
   };
 
@@ -245,7 +245,7 @@ export default function AdminAdminsPage() {
     return (
       <AdminLayout>
         <div className="flex items-center justify-center h-64">
-          <div className="text-white">Loading...</div>
+          <div className="text-white">{t("admin.errors.loading")}</div>
         </div>
       </AdminLayout>
     );
@@ -267,7 +267,7 @@ export default function AdminAdminsPage() {
       }} />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-white">Admin Management</h2>
+          <h2 className="text-2xl font-bold text-white">{t("admin.admins.title")}</h2>
         </div>
 
         {/* Tabs */}
@@ -281,7 +281,7 @@ export default function AdminAdminsPage() {
             }`}
           >
             <Users className="w-5 h-5 inline mr-2" />
-            Admins
+            {t("admin.admins.tab.admins")}
           </button>
           <button
             onClick={() => setActiveTab("roles")}
@@ -292,7 +292,7 @@ export default function AdminAdminsPage() {
             }`}
           >
             <Shield className="w-5 h-5 inline mr-2" />
-            Roles & Permissions
+            {t("admin.admins.tab.roles")}
           </button>
         </div>
 
@@ -309,7 +309,7 @@ export default function AdminAdminsPage() {
                 className="flex items-center gap-2 px-4 py-2 bg-honey-500 hover:bg-honey-600 text-black font-semibold rounded-lg"
               >
                 <Plus className="w-5 h-5" />
-                Add Admin
+                {t("admin.admins.addAdmin")}
               </button>
             </div>
 
@@ -317,11 +317,11 @@ export default function AdminAdminsPage() {
               <table className="w-full">
                 <thead className="bg-white/5">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">Name</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">Email</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">Role</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">Status</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">Actions</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">{t("admin.admins.table.name")}</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">{t("admin.admins.table.email")}</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">{t("admin.admins.table.role")}</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">{t("admin.admins.table.status")}</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">{t("admin.admins.table.actions")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/10">
@@ -334,7 +334,7 @@ export default function AdminAdminsPage() {
                           {admin.roleName}
                           {admin.isMasterAdmin && (
                             <span className="ml-2 px-2 py-1 bg-yellow-500/20 text-yellow-400 text-xs rounded">
-                              Master
+                              {t("admin.admins.master")}
                             </span>
                           )}
                         </span>
@@ -347,7 +347,7 @@ export default function AdminAdminsPage() {
                               : "bg-gray-500/20 text-gray-400"
                           }`}
                         >
-                          {admin.active ? "Active" : "Inactive"}
+                          {admin.active ? t("admin.admins.status.active") : t("admin.admins.status.inactive")}
                         </span>
                       </td>
                       <td className="px-6 py-4">
@@ -397,7 +397,7 @@ export default function AdminAdminsPage() {
                 className="flex items-center gap-2 px-4 py-2 bg-honey-500 hover:bg-honey-600 text-black font-semibold rounded-lg"
               >
                 <Plus className="w-5 h-5" />
-                Add Role
+                {t("admin.admins.addRole")}
               </button>
             </div>
 
@@ -410,7 +410,7 @@ export default function AdminAdminsPage() {
                         {role.name}
                         {role.isMasterAdmin && (
                           <span className="px-2 py-1 bg-yellow-500/20 text-yellow-400 text-xs rounded">
-                            Master Admin
+                            {t("admin.admins.masterAdmin")}
                           </span>
                         )}
                       </h3>
@@ -446,11 +446,11 @@ export default function AdminAdminsPage() {
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div className="bg-glass rounded-xl p-6 border border-white/10 max-w-md w-full mx-4">
               <h3 className="text-2xl font-bold text-white mb-4">
-                {editingAdmin ? "Edit Admin" : "Add Admin"}
+                {editingAdmin ? t("admin.admins.editAdmin") : t("admin.admins.addAdmin")}
               </h3>
               <form onSubmit={handleAdminSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-white mb-2">Name</label>
+                  <label className="block text-white mb-2">{t("admin.admins.table.name")}</label>
                   <input
                     type="text"
                     value={adminForm.name}
@@ -460,7 +460,7 @@ export default function AdminAdminsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-white mb-2">Email</label>
+                  <label className="block text-white mb-2">{t("admin.admins.table.email")}</label>
                   <input
                     type="email"
                     value={adminForm.email}
@@ -471,7 +471,7 @@ export default function AdminAdminsPage() {
                 </div>
                 <div>
                   <label className="block text-white mb-2">
-                    Password {editingAdmin && "(leave blank to keep current)"}
+                    Password {editingAdmin && `(${t("admin.admins.passwordHint")})`}
                   </label>
                   <input
                     type="password"
@@ -482,7 +482,7 @@ export default function AdminAdminsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-white mb-2">Role</label>
+                  <label className="block text-white mb-2">{t("admin.admins.table.role")}</label>
                   <select
                     value={adminForm.roleId}
                     onChange={(e) => setAdminForm({ ...adminForm, roleId: parseInt(e.target.value) })}
@@ -490,7 +490,7 @@ export default function AdminAdminsPage() {
                     required
                   >
                     <option value={0} className="bg-white text-black">
-                      Select a role
+                      {t("admin.admins.selectRole")}
                     </option>
                     {roles.map((role) => (
                       <option key={role.id} value={role.id} className="bg-white text-black">
@@ -507,14 +507,14 @@ export default function AdminAdminsPage() {
                     onChange={(e) => setAdminForm({ ...adminForm, active: e.target.checked })}
                     className="w-4 h-4"
                   />
-                  <label htmlFor="active" className="text-white">Active</label>
+                  <label htmlFor="active" className="text-white">{t("admin.admins.status.active")}</label>
                 </div>
                 <div className="flex gap-4">
                   <button
                     type="submit"
                     className="flex-1 px-4 py-2 bg-honey-500 hover:bg-honey-600 text-black font-semibold rounded-lg"
                   >
-                    {editingAdmin ? "Update" : "Create"}
+                    {editingAdmin ? t("admin.messages.update") : t("admin.messages.create")}
                   </button>
                   <button
                     type="button"
@@ -524,7 +524,7 @@ export default function AdminAdminsPage() {
                     }}
                     className="flex-1 px-4 py-2 bg-white/5 hover:bg-white/10 text-white rounded-lg"
                   >
-                    Cancel
+                    {t("admin.users.cancel")}
                   </button>
                 </div>
               </form>
@@ -537,11 +537,11 @@ export default function AdminAdminsPage() {
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 overflow-y-auto">
             <div className="bg-glass rounded-xl p-6 border border-white/10 max-w-2xl w-full mx-4 my-8">
               <h3 className="text-2xl font-bold text-white mb-4">
-                {editingRole ? "Edit Role" : "Add Role"}
+                {editingRole ? t("admin.admins.editRole") : t("admin.admins.addRole")}
               </h3>
               <form onSubmit={handleRoleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-white mb-2">Role Name</label>
+                  <label className="block text-white mb-2">{t("admin.admins.roleName")}</label>
                   <input
                     type="text"
                     value={roleForm.name}
@@ -551,7 +551,7 @@ export default function AdminAdminsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-white mb-2">Description</label>
+                  <label className="block text-white mb-2">{t("admin.classes.description")}</label>
                   <textarea
                     value={roleForm.description}
                     onChange={(e) => setRoleForm({ ...roleForm, description: e.target.value })}
@@ -567,10 +567,10 @@ export default function AdminAdminsPage() {
                     onChange={(e) => setRoleForm({ ...roleForm, isMasterAdmin: e.target.checked })}
                     className="w-4 h-4"
                   />
-                  <label htmlFor="isMasterAdmin" className="text-white">Master Admin</label>
+                  <label htmlFor="isMasterAdmin" className="text-white">{t("admin.admins.masterAdmin")}</label>
                 </div>
                 <div>
-                  <label className="block text-white mb-2">Permissions</label>
+                  <label className="block text-white mb-2">{t("admin.admins.permissions")}</label>
                   <div className="bg-white/5 rounded-lg p-4 max-h-64 overflow-y-auto">
                     <div className="grid grid-cols-2 gap-2">
                       {ALL_PERMISSIONS.map((permission) => (
@@ -604,7 +604,7 @@ export default function AdminAdminsPage() {
                     type="submit"
                     className="flex-1 px-4 py-2 bg-honey-500 hover:bg-honey-600 text-black font-semibold rounded-lg"
                   >
-                    {editingRole ? "Update" : "Create"}
+                    {editingRole ? t("admin.messages.update") : t("admin.messages.create")}
                   </button>
                   <button
                     type="button"
@@ -614,7 +614,7 @@ export default function AdminAdminsPage() {
                     }}
                     className="flex-1 px-4 py-2 bg-white/5 hover:bg-white/10 text-white rounded-lg"
                   >
-                    Cancel
+                    {t("admin.users.cancel")}
                   </button>
                 </div>
               </form>

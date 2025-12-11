@@ -1,5 +1,6 @@
 import { Context, Next } from "hono";
 import { verify } from "hono/jwt";
+import { jwtVerify } from "jose";
 import { db } from "../db";
 import { admins, adminPermissions, adminRoles } from "../db/schema";
 import { eq } from "drizzle-orm";
@@ -32,7 +33,24 @@ export const adminAuth = async (c: Context, next: Next) => {
   const token = authHeader.substring(7);
 
   try {
-    const payload = await verify(token, process.env.JWT_SECRET || "secret");
+    // Use the same JWT_SECRET as in auth.ts
+    const jwtSecret = new TextEncoder().encode(
+      process.env.JWT_SECRET || "beehive-super-secret-jwt-key-change-in-production"
+    );
+    
+    // Try to verify with jose first (for tokens with issuer/audience)
+    let payload: any;
+    try {
+      const { payload: josePayload } = await jwtVerify(token, jwtSecret, {
+        issuer: "beehive-api",
+        audience: "beehive-app",
+      });
+      payload = josePayload;
+    } catch (joseError) {
+      // Fallback to hono/jwt verification for backward compatibility
+      const jwtSecretString = process.env.JWT_SECRET || "beehive-super-secret-jwt-key-change-in-production";
+      payload = await verify(token, jwtSecretString);
+    }
 
     if (!payload.adminId) {
       return c.json({ error: "Invalid token" }, 401);

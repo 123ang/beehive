@@ -4,7 +4,7 @@
  * In production (when NEXT_PUBLIC_API_URL is not set), use relative paths
  * which will be handled by Nginx proxy to the API backend.
  * 
- * In development, use the environment variable or default to localhost:4000
+ * In development, use the environment variable or default to localhost:4001
  */
 export function getApiUrl(): string {
   // If NEXT_PUBLIC_API_URL is explicitly set, use it

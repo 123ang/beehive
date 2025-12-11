@@ -123,7 +123,7 @@ app.onError((err, c) => {
 });
 
 // Start server
-const port = parseInt(process.env.API_PORT || "4000");
+const port = parseInt(process.env.API_PORT || "4001");
 
 console.log(`
 🐝 ================================================

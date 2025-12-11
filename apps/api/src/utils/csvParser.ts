@@ -3,6 +3,9 @@ import * as XLSX from "xlsx";
 
 export interface ParsedRow {
   wallet_address: string;
+  referrer_wallet?: string;
+  register_time?: string;
+  username?: string;
   email?: string;
   name?: string;
   phone?: string;

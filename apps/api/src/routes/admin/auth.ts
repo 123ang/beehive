@@ -1,5 +1,6 @@
 import { Hono } from "hono";
-import { sign, verify } from "hono/jwt";
+import { verify } from "hono/jwt";
+import { SignJWT } from "jose";
 import { db } from "../../db";
 import { admins, adminRoles, adminPermissions } from "../../db/schema";
 import { eq } from "drizzle-orm";
@@ -69,16 +70,21 @@ adminAuthRouter.post("/login", async (c) => {
       .from(adminPermissions)
       .where(eq(adminPermissions.roleId, admin.roleId));
 
-    // Generate JWT token
-    const token = await sign(
-      {
-        adminId: admin.id,
-        email: admin.email,
-        roleId: admin.roleId,
-        exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7, // 7 days
-      },
-      process.env.JWT_SECRET || "secret"
+    // Generate JWT token using jose to include issuer claim
+    const jwtSecret = new TextEncoder().encode(
+      process.env.JWT_SECRET || "beehive-super-secret-jwt-key-change-in-production"
     );
+    const token = await new SignJWT({
+      adminId: admin.id,
+      email: admin.email,
+      roleId: admin.roleId,
+    })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuedAt()
+      .setExpirationTime("7d")
+      .setIssuer("beehive-api")
+      .setAudience("beehive-app")
+      .sign(jwtSecret);
 
     // Update last login
     await db
@@ -145,7 +151,7 @@ adminAuthRouter.get("/me", async (c) => {
     const token = authHeader.substring(7);
     
     try {
-      const payload = await verify(token, process.env.JWT_SECRET || "secret");
+      const payload = await verify(token, process.env.JWT_SECRET || "beehive-super-secret-jwt-key-change-in-production");
 
       if (!payload.adminId) {
         return c.json({ error: "Invalid token" }, 401);

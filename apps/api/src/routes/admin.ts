@@ -32,8 +32,13 @@ adminRoutes.route("/nft-collections", adminNftCollectionsRouter);
 adminRoutes.route("/classes", adminClassesRouter);
 adminRoutes.route("/admins", adminAdminsRouter);
 
-// Apply auth and admin middleware for legacy routes
-adminRoutes.use("/*", authMiddleware, adminMiddleware);
+// Apply adminAuth middleware to legacy routes that don't have their own middleware
+// Note: Individual routers (news, users, etc.) already apply adminAuth middleware
+import { adminAuth } from "../middleware/adminAuth";
+adminRoutes.use("/stats", adminAuth);
+adminRoutes.use("/members", adminAuth);
+adminRoutes.use("/rewards", adminAuth);
+adminRoutes.use("/transactions", adminAuth);
 
 /**
  * Get platform statistics

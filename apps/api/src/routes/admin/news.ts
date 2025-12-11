@@ -36,6 +36,38 @@ adminNewsRouter.get("/", requirePermission("news.create"), async (c) => {
   return c.json({ success: true, data: articlesWithTranslations });
 });
 
+// Get single news article
+adminNewsRouter.get("/:id", requirePermission("news.create"), async (c) => {
+  const id = parseInt(c.req.param("id"));
+
+  const [article] = await db
+    .select()
+    .from(newsArticles)
+    .where(eq(newsArticles.id, id))
+    .limit(1);
+
+  if (!article) {
+    return c.json({ error: "Article not found" }, 404);
+  }
+
+  // Get translations for the article
+  const translations = await db
+    .select()
+    .from(newsTranslations)
+    .where(eq(newsTranslations.articleId, id));
+  
+  return c.json({
+    success: true,
+    data: {
+      ...article,
+      translations: translations.reduce((acc, t) => ({
+        ...acc,
+        [t.language]: { title: t.title, content: t.content }
+      }), {})
+    }
+  });
+});
+
 // Create news article
 adminNewsRouter.post("/", requirePermission("news.create"), async (c) => {
   const admin = c.get("admin");

@@ -11,8 +11,6 @@ import {
   GraduationCap,
   Image,
   LogOut,
-  Menu,
-  X,
   Globe,
   Shield,
 } from "lucide-react";
@@ -32,7 +30,6 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { lang, setLang, t } = useTranslation();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [langMenuOpen, setLangMenuOpen] = useState(false);
 
   const handleLogout = () => {
@@ -88,24 +85,14 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex">
-      {/* Sidebar */}
-      <aside
-        className={`${
-          sidebarOpen ? "w-64" : "w-0"
-        } bg-glass border-r border-white/10 transition-all duration-300 overflow-hidden flex-shrink-0`}
-      >
+      {/* Sidebar - Fixed on Left */}
+      <aside className="fixed left-0 top-0 h-screen w-64 bg-glass border-r border-white/10 flex-shrink-0 z-30">
         <div className="h-full flex flex-col">
           {/* Sidebar Header */}
-          <div className="p-4 border-b border-white/10 flex items-center justify-between">
+          <div className="p-4 border-b border-white/10">
             <h2 className="text-xl font-bold text-white">
               {t("admin.title") || "Admin Panel"}
             </h2>
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="lg:hidden text-white hover:text-gray-300"
-            >
-              <X className="w-5 h-5" />
-            </button>
           </div>
 
           {/* Navigation */}
@@ -185,23 +172,15 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         </div>
       </aside>
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Main Content - Offset for Fixed Sidebar */}
+      <div className="flex-1 flex flex-col overflow-hidden ml-64">
         {/* Top Header */}
         <div className="bg-glass border-b border-white/10">
           <div className="px-4 sm:px-6 lg:px-8 py-4">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={() => setSidebarOpen(!sidebarOpen)}
-                  className="lg:hidden text-white hover:text-gray-300"
-                >
-                  <Menu className="w-6 h-6" />
-                </button>
-                <h1 className="text-2xl font-bold text-white">
-                  {navItems.find((item) => item.path === pathname)?.label || "Dashboard"}
-                </h1>
-              </div>
+              <h1 className="text-2xl font-bold text-white">
+                {navItems.find((item) => item.path === pathname)?.label || "Dashboard"}
+              </h1>
             </div>
           </div>
         </div>

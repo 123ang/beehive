@@ -20,7 +20,7 @@ interface Merchant {
 
 export default function AdminMerchantsPage() {
   const router = useRouter();
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
   const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -49,7 +49,7 @@ export default function AdminMerchantsPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (!response.ok) throw new Error("Failed to fetch merchants");
+      if (!response.ok) throw new Error(t("admin.errors.failedToFetch"));
       const result = await response.json();
       setMerchants(result.data || []);
     } catch (error) {
@@ -79,7 +79,7 @@ export default function AdminMerchantsPage() {
         body: JSON.stringify(formData),
       });
 
-      if (!response.ok) throw new Error("Failed to save merchant");
+      if (!response.ok) throw new Error(t("admin.errors.failedToSave"));
       setShowModal(false);
       setEditingMerchant(null);
       setFormData({
@@ -93,12 +93,12 @@ export default function AdminMerchantsPage() {
       fetchMerchants(token);
     } catch (error) {
       console.error("Error saving merchant:", error);
-      alert("Failed to save merchant");
+      alert(t("admin.errors.failedToSave"));
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("Are you sure you want to delete this merchant?")) return;
+    if (!confirm(t("admin.confirm.deleteMerchant"))) return;
     const token = localStorage.getItem("adminToken");
     if (!token) return;
 
@@ -108,11 +108,11 @@ export default function AdminMerchantsPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (!response.ok) throw new Error("Failed to delete merchant");
+      if (!response.ok) throw new Error(t("admin.errors.failedToDelete"));
       fetchMerchants(token);
     } catch (error) {
       console.error("Error deleting merchant:", error);
-      alert("Failed to delete merchant");
+      alert(t("admin.errors.failedToDelete"));
     }
   };
 
@@ -133,7 +133,7 @@ export default function AdminMerchantsPage() {
     return (
       <AdminLayout>
         <div className="flex items-center justify-center h-64">
-          <div className="text-white">Loading...</div>
+          <div className="text-white">{t("admin.errors.loading")}</div>
         </div>
       </AdminLayout>
     );
@@ -162,7 +162,7 @@ export default function AdminMerchantsPage() {
             className="flex items-center gap-2 px-4 py-2 bg-honey-500 hover:bg-honey-600 text-black font-semibold rounded-lg"
           >
             <Plus className="w-5 h-5" />
-            Add Merchant
+            {t("admin.merchants.addMerchant")}
           </button>
         </div>
 
@@ -196,7 +196,13 @@ export default function AdminMerchantsPage() {
                       : "bg-gray-500/20 text-gray-400"
                   }`}
                 >
-                  {merchant.active ? "Active" : "Inactive"}
+                  {merchant.active 
+                    ? (lang === "zh-CN" || lang === "zh-TW" 
+                        ? (lang === "zh-CN" ? "活跃" : "活躍") 
+                        : "Active")
+                    : (lang === "zh-CN" || lang === "zh-TW" 
+                        ? (lang === "zh-CN" ? "未启用" : "未啟用") 
+                        : "Inactive")}
                 </span>
                 <div className="flex gap-2">
                   {merchant.merchantPageUrl && (
@@ -228,14 +234,16 @@ export default function AdminMerchantsPage() {
         </div>
 
         {showModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-glass rounded-xl p-6 border border-white/10 max-w-2xl w-full mx-4">
-              <h3 className="text-2xl font-bold text-white mb-4">
-                {editingMerchant ? "Edit Merchant" : "Add Merchant"}
-              </h3>
-              <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+            <div className="bg-glass rounded-xl border border-white/10 max-w-2xl w-full my-auto max-h-[90vh] flex flex-col">
+              <div className="p-6 border-b border-white/10 flex-shrink-0">
+                <h3 className="text-2xl font-bold text-white">
+                  {editingMerchant ? t("admin.merchants.editMerchant") : t("admin.merchants.addMerchant")}
+                </h3>
+              </div>
+              <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
                 <div>
-                  <label className="block text-white mb-2">Name</label>
+                  <label className="block text-white mb-2">{t("admin.merchants.merchantName")}</label>
                   <input
                     type="text"
                     value={formData.name}
@@ -245,7 +253,7 @@ export default function AdminMerchantsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-white mb-2">Description</label>
+                  <label className="block text-white mb-2">{t("admin.merchants.description")}</label>
                   <textarea
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -254,7 +262,7 @@ export default function AdminMerchantsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-white mb-2">Logo URL</label>
+                  <label className="block text-white mb-2">{t("admin.merchants.logoUrl")}</label>
                   <input
                     type="url"
                     value={formData.logoUrl}
@@ -263,7 +271,7 @@ export default function AdminMerchantsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-white mb-2">Merchant Page URL</label>
+                  <label className="block text-white mb-2">{t("admin.merchants.merchantPageUrl")}</label>
                   <input
                     type="url"
                     value={formData.merchantPageUrl}
@@ -272,7 +280,7 @@ export default function AdminMerchantsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-white mb-2">Category</label>
+                  <label className="block text-white mb-2">{t("admin.merchants.category")}</label>
                   <input
                     type="text"
                     value={formData.category}
@@ -289,7 +297,7 @@ export default function AdminMerchantsPage() {
                     className="w-4 h-4"
                   />
                   <label htmlFor="active" className="text-white">
-                    Active
+                    {t("admin.merchants.active")}
                   </label>
                 </div>
                 <div className="flex gap-4">
@@ -297,7 +305,7 @@ export default function AdminMerchantsPage() {
                     type="submit"
                     className="flex-1 px-4 py-2 bg-honey-500 hover:bg-honey-600 text-black font-semibold rounded-lg"
                   >
-                    {editingMerchant ? "Update" : "Create"}
+                    {editingMerchant ? t("admin.messages.update") : t("admin.messages.create")}
                   </button>
                   <button
                     type="button"
@@ -307,7 +315,7 @@ export default function AdminMerchantsPage() {
                     }}
                     className="flex-1 px-4 py-2 bg-white/5 hover:bg-white/10 text-white rounded-lg"
                   >
-                    Cancel
+                    {t("admin.users.cancel")}
                   </button>
                 </div>
               </form>

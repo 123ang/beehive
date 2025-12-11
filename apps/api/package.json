@@ -16,6 +16,9 @@
     "test-db": "node scripts/testDbConnection.js",
     "db:update-levels": "tsx src/scripts/updateMemberLevels.ts",
     "db:build-tree": "tsx src/scripts/buildTreeFromCSV.ts",
+    "db:reimport": "tsx src/scripts/reimportMembersFromCSV.ts",
+    "db:fix-placements": "tsx src/scripts/fixMemberPlacements.ts",
+    "db:view-matrix": "tsx src/scripts/viewMatrix.ts",
     "clean": "rimraf dist"
   },
   "dependencies": {
