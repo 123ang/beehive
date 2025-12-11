@@ -22,11 +22,14 @@ adminAuthRouter.post("/login", async (c) => {
     }
 
     // Find admin by email
+    console.log("Querying database for admin with email:", email.toLowerCase());
     const [admin] = await db
       .select()
       .from(admins)
       .where(eq(admins.email, email.toLowerCase()))
       .limit(1);
+
+    console.log("Admin found:", admin ? `ID: ${admin.id}, Email: ${admin.email}` : "Not found");
 
     if (!admin) {
       return c.json({ error: "Invalid credentials" }, 401);
@@ -109,7 +112,13 @@ adminAuthRouter.post("/login", async (c) => {
       },
     });
   } catch (error: any) {
+    // Always log full error details for debugging
     console.error("Admin login error:", error);
+    console.error("Error stack:", error?.stack);
+    console.error("Error message:", error?.message);
+    console.error("Error code:", error?.code);
+    console.error("Error sqlMessage:", error?.sqlMessage);
+    
     // Return more detailed error in development, generic in production
     const errorMessage = process.env.NODE_ENV === "production" 
       ? "Internal server error" 
