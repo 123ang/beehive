@@ -372,7 +372,7 @@ NODE_ENV=production
 # Or if using same domain with full URL:
 # NEXT_PUBLIC_API_URL=https://beehive-lifestyle.info/api
 NEXT_PUBLIC_CHAIN_ID=42161
-NEXT_PUBLIC_WALLET_CONNECT_ID=bbef8141df63638e7cd94f8b9c098b68
+NEXT_PUBLIC_WALLET_CONNECT_ID=75942e05f026935efd50dfbe5c5d337d
 
 # Domain
 NEXT_PUBLIC_DOMAIN=https://beehive-lifestyle.info
@@ -623,7 +623,7 @@ cd /root/projects/beehive/apps/web
 grep NEXT_PUBLIC_WALLET_CONNECT_ID ../../.env
 
 # If not set, add it to .env file:
-# NEXT_PUBLIC_WALLET_CONNECT_ID=bbef8141df63638e7cd94f8b9c098b68
+# NEXT_PUBLIC_WALLET_CONNECT_ID=75942e05f026935efd50dfbe5c5d337d
 
 pnpm install  # If dependencies aren't installed
 pnpm build    # This creates .next folder
@@ -1084,7 +1084,7 @@ NEXT_PUBLIC_API_URL=https://beehive-lifestyle.info/api
 # NEXT_PUBLIC_API_URL=https://api.beehive-lifestyle.info
 
 NEXT_PUBLIC_CHAIN_ID=42161
-NEXT_PUBLIC_WALLET_CONNECT_ID=bbef8141df63638e7cd94f8b9c098b68
+NEXT_PUBLIC_WALLET_CONNECT_ID=75942e05f026935efd50dfbe5c5d337d
 NEXT_PUBLIC_DOMAIN=https://beehive-lifestyle.info
 
 # Contracts
