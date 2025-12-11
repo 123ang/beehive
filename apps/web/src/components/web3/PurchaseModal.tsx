@@ -44,7 +44,7 @@ export function PurchaseModal({
   const [error, setError] = useState<string | null>(null);
 
   const { balance } = useUSDTBalance();
-  const { allowance, refetchAllowance } = useUSDTAllowance();
+  const { allowance } = useUSDTAllowance();
   const {
     purchaseWithApproval,
     isApproving,
@@ -54,6 +54,7 @@ export function PurchaseModal({
     isPurchaseConfirming,
     isPurchaseSuccess,
     hash,
+    refetchAllowance,
   } = usePurchaseMembership();
 
   const levelInfo = MEMBERSHIP_LEVELS.find((l) => l.level === level);
@@ -67,10 +68,10 @@ export function PurchaseModal({
   // Handle approval success
   useEffect(() => {
     if (isApproveSuccess && step === "approving") {
-      refetchAllowance();
+      refetchAllowance?.();
       setStep("purchase");
     }
-  }, [isApproveSuccess, step]);
+  }, [isApproveSuccess, step, refetchAllowance]);
 
   // Handle purchase success
   useEffect(() => {

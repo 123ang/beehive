@@ -586,9 +586,43 @@ See `docs/CHECK_PORTS.md` for detailed port checking instructions.
 
 ---
 
-## 7. Start Applications with PM2
+## 7. Build Applications
 
-### 7.1 Create PM2 Ecosystem File
+**⚠️ IMPORTANT: You must build both applications before starting them with PM2!**
+
+### 7.1 Build API
+
+```bash
+cd /root/projects/beehive/apps/api
+pnpm install  # If dependencies aren't installed
+pnpm build    # This creates dist/index.js
+```
+
+Verify the build:
+```bash
+ls -la dist/index.js
+```
+
+### 7.2 Build Web (Next.js)
+
+```bash
+cd /root/projects/beehive/apps/web
+pnpm install  # If dependencies aren't installed
+pnpm build    # This creates .next folder
+```
+
+Verify the build:
+```bash
+ls -la .next
+```
+
+**Note:** The build process may take a few minutes. Make sure both builds complete successfully before proceeding.
+
+---
+
+## 8. Start Applications with PM2
+
+### 8.1 Create PM2 Ecosystem File
 
 ```bash
 # Create PM2 config
@@ -653,13 +687,13 @@ module.exports = {
 
 Save and exit.
 
-### 7.2 Create Logs Directory
+### 8.2 Create Logs Directory
 
 ```bash
 mkdir -p /root/projects/beehive/logs
 ```
 
-### 7.3 Start Applications
+### 8.3 Start Applications
 
 ```bash
 # Start applications with PM2
@@ -677,9 +711,9 @@ pm2 logs
 
 ---
 
-## 8. DNS Configuration
+## 9. DNS Configuration
 
-### 8.1 Configure DNS Records
+### 9.1 Configure DNS Records
 
 In your domain registrar's DNS settings, add:
 
@@ -729,9 +763,9 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ---
 
-## 9. Firewall Configuration
+## 10. Firewall Configuration
 
-### 9.1 Configure UFW Firewall
+### 10.1 Configure UFW Firewall
 
 ```bash
 # Allow SSH
