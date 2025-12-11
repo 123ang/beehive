@@ -4,7 +4,8 @@ import { admins, adminRoles, adminPermissions } from "../../db/schema";
 import { eq, desc } from "drizzle-orm";
 import { adminAuth, requirePermission } from "../../middleware/adminAuth";
 import { logActivity, getClientIp, getUserAgent } from "../../utils/activityLogger";
-import bcrypt from "bcryptjs";
+// ESM-compatible bcrypt import
+import * as bcrypt from "bcryptjs";
 
 const adminAdminsRouter = new Hono();
 adminAdminsRouter.use("/*", adminAuth);

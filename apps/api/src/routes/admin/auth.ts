@@ -3,7 +3,8 @@ import { sign, verify } from "hono/jwt";
 import { db } from "../../db";
 import { admins, adminRoles, adminPermissions } from "../../db/schema";
 import { eq } from "drizzle-orm";
-import bcrypt from "bcryptjs";
+// ESM-compatible bcrypt import
+import * as bcrypt from "bcryptjs";
 import { logActivity, getClientIp, getUserAgent } from "../../utils/activityLogger";
 
 const adminAuthRouter = new Hono();
@@ -36,7 +37,13 @@ adminAuthRouter.post("/login", async (c) => {
     }
 
     // Verify password
-    const isValidPassword = await bcrypt.compare(password, admin.passwordHash);
+    let isValidPassword = false;
+    try {
+      isValidPassword = await bcrypt.compare(password, admin.passwordHash);
+    } catch (bcryptError: any) {
+      console.error("Bcrypt compare error:", bcryptError);
+      throw new Error(`Password verification failed: ${bcryptError?.message || String(bcryptError)}`);
+    }
 
     if (!isValidPassword) {
       return c.json({ error: "Invalid credentials" }, 401);

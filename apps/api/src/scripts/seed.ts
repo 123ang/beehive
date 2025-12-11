@@ -1,7 +1,8 @@
 import { db } from "../db";
 import { adminRoles, adminPermissions, admins } from "../db/schema";
 import { eq } from "drizzle-orm";
-import bcrypt from "bcryptjs";
+// ESM-compatible bcrypt import
+import * as bcrypt from "bcryptjs";
 
 async function seed() {
   console.log("🌱 Seeding database...");
