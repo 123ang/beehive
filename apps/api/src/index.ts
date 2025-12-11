@@ -2,10 +2,37 @@
 // BEEHIVE API - MAIN ENTRY POINT
 // ============================================
 
-import { config } from "dotenv";
-
 // Load environment variables from .env file
-config({ path: ".env" });
+// In production, PM2 sets environment variables, so dotenv is optional
+import { readFileSync } from "fs";
+import { fileURLToPath } from "url";
+import { dirname, resolve } from "path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Manually load .env file (ESM-compatible, no dynamic require)
+try {
+  const envPath = resolve(__dirname, "../../.env");
+  const envFile = readFileSync(envPath, "utf-8");
+  const envLines = envFile.split("\n");
+  
+  for (const line of envLines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    
+    const [key, ...valueParts] = trimmed.split("=");
+    if (key && valueParts.length > 0) {
+      const value = valueParts.join("=").trim().replace(/^["']|["']$/g, "");
+      if (!process.env[key]) {
+        process.env[key] = value;
+      }
+    }
+  }
+} catch (error) {
+  // .env file not found or can't be read - use system/PM2 environment variables
+  // This is fine in production where PM2 sets env vars
+}
 
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";

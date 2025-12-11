@@ -5,10 +5,8 @@
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
 import * as schema from "./schema";
-import { config } from "dotenv";
-
-// Load environment variables from .env file
-config({ path: ".env" });
+// Environment variables are loaded in index.ts
+// No need to load again here - they're already in process.env
 
 // Connection string from environment
 const connectionString = process.env.DATABASE_URL || "mysql://root:@localhost:3306/beehive";

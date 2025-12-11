@@ -898,7 +898,35 @@ df -h
 
 ## 12. Troubleshooting
 
-### 12.1 Application Not Starting
+### 12.1 502 Bad Gateway Error
+
+If you see "502 Bad Gateway" when accessing `/api/*` endpoints:
+
+1. **Check if API server is running:**
+   ```bash
+   pm2 status
+   pm2 logs beehive-api --lines 50
+   ```
+
+2. **Verify API is listening on port 4001:**
+   ```bash
+   sudo netstat -tulpn | grep :4001
+   curl http://localhost:4001/api/health
+   ```
+
+3. **Check Nginx error logs:**
+   ```bash
+   sudo tail -f /var/log/nginx/beehive-error.log
+   ```
+
+4. **Restart API server:**
+   ```bash
+   pm2 restart beehive-api
+   ```
+
+See `docs/TROUBLESHOOTING_502.md` for detailed troubleshooting steps.
+
+### 12.2 Application Not Starting
 
 ```bash
 # Check PM2 logs
