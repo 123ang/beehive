@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Plus, Edit, Trash2 } from "lucide-react";
 import { useTranslation } from "@/i18n/TranslationProvider";
+import { getApiEndpoint } from "@/lib/apiUrl";
 
 interface NFTCollection {
   id: number;
@@ -45,8 +46,7 @@ export default function AdminNFTCollectionsPage() {
 
   const fetchCollections = async (token: string) => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-      const response = await fetch(`${apiUrl}/api/admin/nft-collections`, {
+      const response = await fetch(getApiEndpoint("admin/nft-collections"), {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -66,10 +66,9 @@ export default function AdminNFTCollectionsPage() {
     if (!token) return;
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
       const url = editingCollection
-        ? `${apiUrl}/api/admin/nft-collections/${editingCollection.id}`
-        : `${apiUrl}/api/admin/nft-collections`;
+        ? getApiEndpoint(`admin/nft-collections/${editingCollection.id}`)
+        : getApiEndpoint("admin/nft-collections");
       const method = editingCollection ? "PUT" : "POST";
 
       const response = await fetch(url, {
@@ -112,8 +111,7 @@ export default function AdminNFTCollectionsPage() {
     if (!token) return;
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-      const response = await fetch(`${apiUrl}/api/admin/nft-collections/${id}`, {
+      const response = await fetch(getApiEndpoint(`admin/nft-collections/${id}`), {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });

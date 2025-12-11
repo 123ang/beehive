@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Plus, Edit, Trash2, Calendar, Video, RefreshCw } from "lucide-react";
 import { useTranslation } from "@/i18n/TranslationProvider";
+import { getApiEndpoint } from "@/lib/apiUrl";
 
 interface Class {
   id: number;
@@ -68,8 +69,7 @@ export default function AdminClassesPage() {
 
   const fetchClasses = async (token: string) => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-      const response = await fetch(`${apiUrl}/api/admin/classes`, {
+      const response = await fetch(getApiEndpoint("admin/classes"), {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -77,7 +77,7 @@ export default function AdminClassesPage() {
       const result = await response.json();
       const classesWithMeetings = await Promise.all(
         (result.data || []).map(async (classItem: Class) => {
-          const classResponse = await fetch(`${apiUrl}/api/admin/classes/${classItem.id}`, {
+          const classResponse = await fetch(getApiEndpoint(`admin/classes/${classItem.id}`), {
             headers: { Authorization: `Bearer ${token}` },
           });
           if (classResponse.ok) {
@@ -106,10 +106,9 @@ export default function AdminClassesPage() {
     if (!token) return;
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
       const url = editingClass
-        ? `${apiUrl}/api/admin/classes/${editingClass.id}`
-        : `${apiUrl}/api/admin/classes`;
+        ? getApiEndpoint(`admin/classes/${editingClass.id}`)
+        : getApiEndpoint("admin/classes");
       const method = editingClass ? "PUT" : "POST";
 
       const response = await fetch(url, {
@@ -138,12 +137,11 @@ export default function AdminClassesPage() {
     if (!token || !selectedClassId) return;
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
       const meetingDateTime = new Date(`${meetingFormData.meetingDate}T${meetingFormData.meetingTime}`);
       
       const url = editingMeeting
-        ? `${apiUrl}/api/admin/classes/meetings/${editingMeeting.id}`
-        : `${apiUrl}/api/admin/classes/${selectedClassId}/meetings`;
+        ? getApiEndpoint(`admin/classes/meetings/${editingMeeting.id}`)
+        : getApiEndpoint(`admin/classes/${selectedClassId}/meetings`);
       const method = editingMeeting ? "PUT" : "POST";
 
       const response = await fetch(url, {
@@ -190,8 +188,7 @@ export default function AdminClassesPage() {
     if (!token) return;
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-      const response = await fetch(`${apiUrl}/api/admin/classes/${id}`, {
+      const response = await fetch(getApiEndpoint(`admin/classes/${id}`), {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -210,8 +207,7 @@ export default function AdminClassesPage() {
     if (!token) return;
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-      const response = await fetch(`${apiUrl}/api/admin/classes/meetings/${meetingId}`, {
+      const response = await fetch(getApiEndpoint(`admin/classes/meetings/${meetingId}`), {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });

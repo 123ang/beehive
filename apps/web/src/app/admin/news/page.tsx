@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Plus, Edit, Trash2, Eye, X, Save, EyeOff } from "lucide-react";
 import { useTranslation } from "@/i18n/TranslationProvider";
+import { getApiEndpoint } from "@/lib/apiUrl";
 
 interface NewsArticle {
   id: number;
@@ -57,8 +58,7 @@ export default function AdminNewsPage() {
 
   const fetchArticles = async (token: string) => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-      const response = await fetch(`${apiUrl}/api/admin/news`, {
+      const response = await fetch(getApiEndpoint("admin/news"), {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -114,10 +114,9 @@ export default function AdminNewsPage() {
     }
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
       const url = editingArticle
-        ? `${apiUrl}/api/admin/news/${editingArticle.id}`
-        : `${apiUrl}/api/admin/news`;
+        ? getApiEndpoint(`admin/news/${editingArticle.id}`)
+        : getApiEndpoint("admin/news");
       const method = editingArticle ? "PUT" : "POST";
 
       const response = await fetch(url, {
@@ -157,8 +156,7 @@ export default function AdminNewsPage() {
     if (!token) return;
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-      const response = await fetch(`${apiUrl}/api/admin/news/${id}`, {
+      const response = await fetch(getApiEndpoint(`admin/news/${id}`), {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });

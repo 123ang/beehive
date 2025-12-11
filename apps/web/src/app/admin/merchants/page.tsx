@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Plus, Edit, Trash2, ExternalLink } from "lucide-react";
 import { useTranslation } from "@/i18n/TranslationProvider";
+import { getApiEndpoint } from "@/lib/apiUrl";
 
 interface Merchant {
   id: number;
@@ -44,8 +45,7 @@ export default function AdminMerchantsPage() {
 
   const fetchMerchants = async (token: string) => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-      const response = await fetch(`${apiUrl}/api/admin/merchants`, {
+      const response = await fetch(getApiEndpoint("admin/merchants"), {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -65,10 +65,9 @@ export default function AdminMerchantsPage() {
     if (!token) return;
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
       const url = editingMerchant
-        ? `${apiUrl}/api/admin/merchants/${editingMerchant.id}`
-        : `${apiUrl}/api/admin/merchants`;
+        ? getApiEndpoint(`admin/merchants/${editingMerchant.id}`)
+        : getApiEndpoint("admin/merchants");
       const method = editingMerchant ? "PUT" : "POST";
 
       const response = await fetch(url, {
@@ -104,8 +103,7 @@ export default function AdminMerchantsPage() {
     if (!token) return;
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-      const response = await fetch(`${apiUrl}/api/admin/merchants/${id}`, {
+      const response = await fetch(getApiEndpoint(`admin/merchants/${id}`), {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Upload, FileText, CheckCircle, XCircle, AlertCircle } from "lucide-react";
 import { useTranslation } from "@/i18n/TranslationProvider";
+import { getApiEndpoint } from "@/lib/apiUrl";
 
 export default function AdminBulkImportPage() {
   const router = useRouter();
@@ -34,8 +35,7 @@ export default function AdminBulkImportPage() {
       const formData = new FormData();
       formData.append("file", file);
 
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-      const response = await fetch(`${apiUrl}/api/admin/users/bulk-import`, {
+      const response = await fetch(getApiEndpoint("admin/users/bulk-import"), {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,

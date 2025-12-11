@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Plus, Edit, Trash2, Shield, Users, Key } from "lucide-react";
 import { useTranslation } from "@/i18n/TranslationProvider";
+import { getApiEndpoint } from "@/lib/apiUrl";
 
 interface Admin {
   id: number;
@@ -88,13 +89,12 @@ export default function AdminAdminsPage() {
   const fetchData = async (token: string) => {
     try {
       setLoading(true);
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
       const [adminsRes, rolesRes] = await Promise.all([
-        fetch(`${apiUrl}/api/admin/admins`, {
+        fetch(getApiEndpoint("admin/admins"), {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        fetch(`${apiUrl}/api/admin/admins/roles`, {
+        fetch(getApiEndpoint("admin/admins/roles"), {
           headers: { Authorization: `Bearer ${token}` },
         }),
       ]);
@@ -120,8 +120,7 @@ export default function AdminAdminsPage() {
     if (!token) return;
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-      const response = await fetch(`${apiUrl}/api/admin/admins/roles/${roleId}`, {
+      const response = await fetch(getApiEndpoint(`admin/admins/roles/${roleId}`), {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -145,10 +144,9 @@ export default function AdminAdminsPage() {
     if (!token) return;
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
       const url = editingAdmin
-        ? `${apiUrl}/api/admin/admins/${editingAdmin.id}`
-        : `${apiUrl}/api/admin/admins`;
+        ? getApiEndpoint(`admin/admins/${editingAdmin.id}`)
+        : getApiEndpoint("admin/admins");
       const method = editingAdmin ? "PUT" : "POST";
 
       const response = await fetch(url, {
@@ -177,10 +175,9 @@ export default function AdminAdminsPage() {
     if (!token) return;
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
       const url = editingRole
-        ? `${apiUrl}/api/admin/admins/roles/${editingRole.id}`
-        : `${apiUrl}/api/admin/admins/roles`;
+        ? getApiEndpoint(`admin/admins/roles/${editingRole.id}`)
+        : getApiEndpoint("admin/admins/roles");
       const method = editingRole ? "PUT" : "POST";
 
       const response = await fetch(url, {
@@ -209,8 +206,7 @@ export default function AdminAdminsPage() {
     if (!token) return;
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-      const response = await fetch(`${apiUrl}/api/admin/admins/${id}`, {
+      const response = await fetch(getApiEndpoint(`admin/admins/${id}`), {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -229,8 +225,7 @@ export default function AdminAdminsPage() {
     if (!token) return;
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-      const response = await fetch(`${apiUrl}/api/admin/admins/roles/${id}`, {
+      const response = await fetch(getApiEndpoint(`admin/admins/roles/${id}`), {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });

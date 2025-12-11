@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Search, Edit, ChevronLeft, ChevronRight } from "lucide-react";
 import { useTranslation } from "@/i18n/TranslationProvider";
+import { getApiEndpoint } from "@/lib/apiUrl";
 
 interface User {
   id: number;
@@ -46,11 +47,10 @@ export default function AdminUsersPage() {
   const fetchUsers = async (token: string) => {
     try {
       setLoading(true);
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
       // Query members table instead of users
       const searchParam = search ? `&search=${encodeURIComponent(search)}` : "";
       const response = await fetch(
-        `${apiUrl}/api/admin/users/members?page=${page}&limit=20${searchParam}`,
+        `${getApiEndpoint(`admin/users/members?page=${page}&limit=20${searchParam}`)}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         }
@@ -100,9 +100,8 @@ export default function AdminUsersPage() {
     if (!token) return;
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
       const response = await fetch(
-        `${apiUrl}/api/admin/users/members/${editingUser.id}`,
+        getApiEndpoint(`admin/users/members/${editingUser.id}`),
         {
           method: "PUT",
           headers: {
