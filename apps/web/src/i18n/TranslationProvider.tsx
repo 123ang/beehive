@@ -22,7 +22,9 @@ export function TranslationProvider({ children }: { children: React.ReactNode })
       setLang,
       t: (key: string) => {
         const dict = translations[lang] ?? translations[defaultLanguage];
-        return dict[key] ?? translations[defaultLanguage][key] ?? key;
+        const translation = dict[key] ?? translations[defaultLanguage][key];
+        // Return translation if found, otherwise return key (caller can handle fallback)
+        return translation ?? key;
       },
     }),
     [lang]

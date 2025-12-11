@@ -5,9 +5,13 @@
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
 import * as schema from "./schema";
+import { config } from "dotenv";
+
+// Load environment variables from .env file
+config({ path: ".env" });
 
 // Connection string from environment
-const connectionString = process.env.DATABASE_URL || "mysql://beehive:password@localhost:3306/beehive";
+const connectionString = process.env.DATABASE_URL || "mysql://root:@localhost:3306/beehive";
 
 // Parse connection string
 function parseConnectionString(url: string) {

@@ -9,6 +9,9 @@ import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/Button";
 import { api } from "@/lib/api";
 import { formatNumber, shortenAddress, copyToClipboard, generateReferralLink } from "@/lib/utils";
+import { NewsSection } from "@/components/members/NewsSection";
+import { DiscoverSection } from "@/components/members/DiscoverSection";
+import { ReferralLink } from "@/components/members/ReferralLink";
 import {
   Wallet,
   TrendingUp,
@@ -318,6 +321,15 @@ export default function DashboardPage() {
                   </div>
                 </motion.div>
               </div>
+
+              {/* Referral Link Component */}
+              <ReferralLink />
+
+              {/* News Section */}
+              <NewsSection />
+
+              {/* Discover Section */}
+              <DiscoverSection />
             </>
           )}
         </div>

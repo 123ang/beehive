@@ -13,25 +13,25 @@ const stats = [
 const featureCards = [
   {
     icon: "🔗",
-    title: "Smart Contracts",
-    description: "100% automated blockchain execution",
+    titleKey: "hero.card.smartContracts.title",
+    descKey: "hero.card.smartContracts.desc",
   },
   {
     icon: "💎",
-    title: "NFT Marketplace",
-    description: "Trade exclusive Beehive NFTs",
+    titleKey: "hero.card.nftMarketplace.title",
+    descKey: "hero.card.nftMarketplace.desc",
   },
   {
     icon: "🎯",
-    title: "Matrix Rewards",
-    description: "Exponential wealth growth system",
+    titleKey: "hero.card.matrixRewards.title",
+    descKey: "hero.card.matrixRewards.desc",
   },
   {
     icon: "💰",
-    title: "Earn Passive Income",
-    description: "Build your network and earn from up to 19 layers of referrals",
+    titleKey: "hero.card.earnPassiveIncome.title",
+    descKey: "hero.card.earnPassiveIncome.desc",
     link: "/membership",
-    linkText: "View Levels",
+    linkTextKey: "hero.card.viewLevels",
   },
 ];
 
@@ -86,7 +86,7 @@ export function HeroSection() {
             <span className="text-white">{t("hero.heading").split(" ")[0]} </span>
             <span className="text-gradient-gold">{t("hero.heading").split(" ").slice(1).join(" ")}</span>
           </h1>
-          <p className="text-gray-400 text-lg md:text-xl max-w-2xl mx-auto">
+          <p className="text-white text-lg md:text-xl max-w-2xl mx-auto">
             {t("hero.subtitle")}
           </p>
         </motion.div>
@@ -101,7 +101,7 @@ export function HeroSection() {
           {stats.map((stat) => (
             <div key={stat.labelKey} className="text-center">
               <div className="text-2xl md:text-3xl font-bold text-honey-400">{stat.value}</div>
-              <div className="text-sm text-gray-400">{t(stat.labelKey)}</div>
+              <div className="text-sm text-white">{t(stat.labelKey)}</div>
             </div>
           ))}
         </motion.div>
@@ -136,16 +136,16 @@ export function HeroSection() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {featureCards.map((card, index) => (
               <div
-                key={card.title}
+                key={card.titleKey}
                 className="bg-glass rounded-xl p-6 text-center transition-all duration-300 hover:bg-white/10"
               >
                 <div className="text-4xl mb-3">{card.icon}</div>
-                <h3 className="text-lg font-bold text-white mb-2">{card.title}</h3>
-                <p className="text-gray-400 text-sm mb-3">{card.description}</p>
+                <h3 className="text-lg font-bold text-white mb-2">{t(card.titleKey)}</h3>
+                <p className="text-white text-sm mb-3">{t(card.descKey)}</p>
                 {card.link && (
                   <Link href={card.link}>
                     <button className="text-honey-400 text-sm font-medium hover:text-honey-300 transition-colors">
-                      {card.linkText}
+                      {t(card.linkTextKey || "hero.card.viewLevels")}
                     </button>
                   </Link>
                 )}
@@ -169,7 +169,7 @@ export function HeroSection() {
               </span>
             </button>
           </Link>
-          <p className="mt-4 text-gray-400 flex items-center justify-center gap-2">
+          <p className="mt-4 text-white flex items-center justify-center gap-2">
             <span>🎆</span>
             <span>{t("hero.joinNow.subtitle")}</span>
           </p>

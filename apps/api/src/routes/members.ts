@@ -11,10 +11,16 @@ import { authMiddleware } from "../middleware/auth";
 import { matrixService } from "../services/MatrixService";
 import { rewardService } from "../services/RewardService";
 import { MEMBERSHIP_LEVELS } from "@beehive/shared";
+import memberNewsRouter from "./members/news";
+import memberMerchantsRouter from "./members/merchants";
 
 export const memberRoutes = new Hono();
 
-// Apply auth middleware to all routes
+// Public member routes (no auth required)
+memberRoutes.route("/news", memberNewsRouter);
+memberRoutes.route("/merchants", memberMerchantsRouter);
+
+// Apply auth middleware to protected routes
 memberRoutes.use("/*", authMiddleware);
 
 /**
@@ -71,11 +77,11 @@ memberRoutes.get("/dashboard", async (c) => {
 });
 
 /**
- * Get member's tree structure
+ * Get member's tree structure (shows sponsor and 2 layers below)
  */
 memberRoutes.get("/tree", async (c) => {
   const user = c.get("user");
-  const depth = parseInt(c.req.query("depth") || "3");
+  const depth = parseInt(c.req.query("depth") || "2"); // Default: 2 layers below
 
   const member = await db.query.members.findFirst({
     where: eq(members.walletAddress, user.walletAddress),
@@ -85,11 +91,35 @@ memberRoutes.get("/tree", async (c) => {
     return c.json({ success: false, error: "Not a member" }, 404);
   }
 
+  // Get sponsor information
+  let sponsor = null;
+  if (member.sponsorId) {
+    sponsor = await db.query.members.findFirst({
+      where: eq(members.id, member.sponsorId),
+    });
+  }
+
+  // Get tree structure (member and descendants)
   const tree = await matrixService.getTree(member.id, Math.min(depth, 5));
 
   return c.json({
     success: true,
-    data: tree,
+    data: {
+      member: {
+        id: member.id,
+        walletAddress: member.walletAddress,
+        username: member.username,
+        currentLevel: member.currentLevel,
+        joinedAt: member.joinedAt,
+      },
+      sponsor: sponsor ? {
+        id: sponsor.id,
+        walletAddress: sponsor.walletAddress,
+        username: sponsor.username,
+        currentLevel: sponsor.currentLevel,
+      } : null,
+      tree, // Tree structure showing member and 2 layers below
+    },
   });
 });
 

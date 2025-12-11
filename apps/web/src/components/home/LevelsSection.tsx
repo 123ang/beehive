@@ -37,7 +37,7 @@ export function LevelsSection() {
             <span className="text-white">19 </span>
             <span className="text-gradient-gold">{t("levels.heading").replace("19 ", "")}</span>
           </h2>
-          <p className="text-gray-400 text-lg max-w-2xl mx-auto">
+          <p className="text-white text-lg max-w-2xl mx-auto">
             {t("levels.subheading")}
           </p>
         </motion.div>
@@ -72,20 +72,26 @@ export function LevelsSection() {
                   </span>
                 </div>
 
-                <h3 className="text-xl font-bold text-white mb-1">
-                  {level.name}
+                <h3 className="text-xl font-bold text-white mb-4">
+                  {(() => {
+                    const translationKey = `levels.${level.level}`;
+                    const translated = t(translationKey);
+                    // If translation returns the key itself, use fallback
+                    return translated === translationKey 
+                      ? (level.nameCn || level.name)
+                      : translated;
+                  })()}
                 </h3>
-                <p className="text-gray-500 text-sm mb-4">{level.nameCn}</p>
 
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
-                    <span className="text-gray-400 text-sm">{t("levels.price")}</span>
+                    <span className="text-white text-sm">{t("levels.price")}</span>
                     <span className="text-white font-semibold">
                       ${formatNumber(level.priceUSDT, 0)} USDT
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-gray-400 text-sm">{t("levels.bccReward")}</span>
+                    <span className="text-white text-sm">{t("levels.bccReward")}</span>
                     <span className="text-honey-400 font-semibold">
                       {formatNumber(level.bccReward, 0)} BCC
                     </span>

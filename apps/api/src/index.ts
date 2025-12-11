@@ -2,6 +2,11 @@
 // BEEHIVE API - MAIN ENTRY POINT
 // ============================================
 
+import { config } from "dotenv";
+
+// Load environment variables from .env file
+config({ path: ".env" });
+
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -10,6 +15,8 @@ import { prettyJSON } from "hono/pretty-json";
 import { authRoutes } from "./routes/auth";
 import { memberRoutes } from "./routes/members";
 import { adminRoutes } from "./routes/admin";
+import { referralRoutes } from "./routes/referral";
+import { newsletterRoutes } from "./routes/newsletter";
 import { checkDatabaseConnection } from "./db";
 import { redis } from "./lib/redis";
 
@@ -59,6 +66,8 @@ app.get("/api/health", async (c) => {
 app.route("/api/auth", authRoutes);
 app.route("/api/members", memberRoutes);
 app.route("/api/admin", adminRoutes);
+app.route("/api/referral", referralRoutes);
+app.route("/api/newsletter", newsletterRoutes);
 
 // 404 handler
 app.notFound((c) => {
@@ -96,6 +105,7 @@ console.log(`
    - Auth:   http://localhost:${port}/api/auth/*
    - Members: http://localhost:${port}/api/members/*
    - Admin:  http://localhost:${port}/api/admin/*
+   - Newsletter: http://localhost:${port}/api/newsletter/*
    
 🐝 ================================================
 `);

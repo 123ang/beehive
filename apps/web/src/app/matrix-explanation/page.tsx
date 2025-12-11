@@ -5,47 +5,65 @@ import { Footer } from "@/components/layout/Footer";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { ArrowLeft, Users, TrendingUp, Layers, DollarSign, Gift, Shield } from "lucide-react";
-
-const matrixFeatures = [
-  {
-    icon: <Users className="w-6 h-6" />,
-    title: "3×3 Structure",
-    description: "Each member can have up to 3 direct referrals in their first level. As your network grows, you build a tree structure that expands exponentially.",
-  },
-  {
-    icon: <Layers className="w-6 h-6" />,
-    title: "19 Levels Deep",
-    description: "Earn rewards from your network up to 19 layers deep. The deeper your network grows, the more earning potential you unlock.",
-  },
-  {
-    icon: <DollarSign className="w-6 h-6" />,
-    title: "Instant Payouts",
-    description: "When someone in your network purchases a membership level, rewards are distributed instantly through smart contracts. No waiting, no middlemen.",
-  },
-  {
-    icon: <TrendingUp className="w-6 h-6" />,
-    title: "Spillover System",
-    description: "If a sponsor already has 3 direct referrals, new members are placed in available positions below, benefiting the entire network.",
-  },
-  {
-    icon: <Gift className="w-6 h-6" />,
-    title: "BCC Token Rewards",
-    description: "In addition to USDT rewards, earn BCC tokens with every level purchase. Build your token portfolio while growing your network.",
-  },
-  {
-    icon: <Shield className="w-6 h-6" />,
-    title: "On-Chain Transparency",
-    description: "All transactions and matrix positions are recorded on the blockchain. Verify your earnings and network structure at any time.",
-  },
-];
-
-const levelRewards = [
-  { level: 1, name: "Direct Sponsor", reward: "$100 USDT", description: "Earned when your direct referral purchases Level 1" },
-  { level: 2, name: "Layer 2", reward: "$50 USDT", description: "Earned from 2nd layer members (your referrals' referrals)" },
-  { level: 3, name: "Layer 3-19", reward: "Varies", description: "Rewards decrease with depth but multiply with network size" },
-];
+import { useTranslation } from "@/i18n/TranslationProvider";
 
 export default function MatrixExplanationPage() {
+  const { t } = useTranslation();
+
+  const matrixFeatures = [
+    {
+      icon: <Users className="w-6 h-6" />,
+      titleKey: "matrix.feature.structure.title",
+      descKey: "matrix.feature.structure.desc",
+    },
+    {
+      icon: <Layers className="w-6 h-6" />,
+      titleKey: "matrix.feature.levels.title",
+      descKey: "matrix.feature.levels.desc",
+    },
+    {
+      icon: <DollarSign className="w-6 h-6" />,
+      titleKey: "matrix.feature.payouts.title",
+      descKey: "matrix.feature.payouts.desc",
+    },
+    {
+      icon: <TrendingUp className="w-6 h-6" />,
+      titleKey: "matrix.feature.spillover.title",
+      descKey: "matrix.feature.spillover.desc",
+    },
+    {
+      icon: <Gift className="w-6 h-6" />,
+      titleKey: "matrix.feature.bcc.title",
+      descKey: "matrix.feature.bcc.desc",
+    },
+    {
+      icon: <Shield className="w-6 h-6" />,
+      titleKey: "matrix.feature.transparency.title",
+      descKey: "matrix.feature.transparency.desc",
+    },
+  ];
+
+  const levelRewards = [
+    {
+      level: 1,
+      nameKey: "matrix.rewards.direct.name",
+      rewardKey: "matrix.rewards.direct.reward",
+      descKey: "matrix.rewards.direct.desc",
+    },
+    {
+      level: 2,
+      nameKey: "matrix.rewards.layer2.name",
+      rewardKey: "matrix.rewards.layer2.reward",
+      descKey: "matrix.rewards.layer2.desc",
+    },
+    {
+      level: 3,
+      nameKey: "matrix.rewards.layer3.name",
+      rewardKey: "matrix.rewards.layer3.reward",
+      descKey: "matrix.rewards.layer3.desc",
+    },
+  ];
+
   return (
     <main className="min-h-screen">
       <Header />
@@ -63,7 +81,7 @@ export default function MatrixExplanationPage() {
               className="inline-flex items-center gap-2 text-gray-400 hover:text-honey-400 transition-colors"
             >
               <ArrowLeft size={20} />
-              <span>Back to Home</span>
+              <span>{t("matrix.back")}</span>
             </Link>
           </motion.div>
 
@@ -74,13 +92,10 @@ export default function MatrixExplanationPage() {
             className="text-center mb-16"
           >
             <h1 className="text-4xl md:text-5xl font-bold mb-4 font-display">
-              <span className="text-white">The </span>
-              <span className="text-gradient-gold">3×3 Matrix</span>
-              <span className="text-white"> Explained</span>
+              <span className="text-gradient-gold">{t("matrix.title")}</span>
             </h1>
-            <p className="text-gray-400 text-lg max-w-2xl mx-auto">
-              Understand how our unique matrix system creates fair distribution 
-              and maximizes earning potential for all members.
+            <p className="text-white text-lg max-w-2xl mx-auto">
+              {t("matrix.subtitle")}
             </p>
           </motion.div>
 
@@ -92,7 +107,7 @@ export default function MatrixExplanationPage() {
             className="bg-glass rounded-2xl p-8 mb-12"
           >
             <h2 className="text-2xl font-bold text-white mb-6 text-center font-display">
-              How It Works
+              {t("matrix.howItWorks")}
             </h2>
             
             {/* Simple Matrix Diagram */}
@@ -137,8 +152,8 @@ export default function MatrixExplanationPage() {
                 ))}
               </div>
               
-              <p className="text-gray-400 text-sm text-center mt-4">
-                Each member brings 3 → Each of those brings 3 → Exponential growth!
+              <p className="text-white text-sm text-center mt-4">
+                {t("matrix.visualization")}
               </p>
             </div>
           </motion.div>
@@ -152,7 +167,7 @@ export default function MatrixExplanationPage() {
           >
             {matrixFeatures.map((feature, index) => (
               <motion.div
-                key={feature.title}
+                key={feature.titleKey}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 * index }}
@@ -161,8 +176,8 @@ export default function MatrixExplanationPage() {
                 <div className="w-12 h-12 rounded-xl bg-honey-500/20 flex items-center justify-center mb-4 text-honey-400">
                   {feature.icon}
                 </div>
-                <h3 className="text-lg font-bold text-white mb-2">{feature.title}</h3>
-                <p className="text-gray-400 text-sm">{feature.description}</p>
+                <h3 className="text-lg font-bold text-white mb-2">{t(feature.titleKey)}</h3>
+                <p className="text-white text-sm">{t(feature.descKey)}</p>
               </motion.div>
             ))}
           </motion.div>
@@ -175,7 +190,7 @@ export default function MatrixExplanationPage() {
             className="bg-glass rounded-2xl p-8 mb-12"
           >
             <h2 className="text-2xl font-bold text-white mb-6 font-display">
-              Reward Structure
+              {t("matrix.rewards.title")}
             </h2>
             
             <div className="space-y-4">
@@ -189,11 +204,11 @@ export default function MatrixExplanationPage() {
                       {item.level}
                     </div>
                     <div>
-                      <p className="font-semibold text-white">{item.name}</p>
-                      <p className="text-sm text-gray-400">{item.description}</p>
+                      <p className="font-semibold text-white">{t(item.nameKey)}</p>
+                      <p className="text-sm text-white">{t(item.descKey)}</p>
                     </div>
                   </div>
-                  <div className="text-honey-400 font-bold">{item.reward}</div>
+                  <div className="text-honey-400 font-bold">{t(item.rewardKey)}</div>
                 </div>
               ))}
             </div>
@@ -208,18 +223,17 @@ export default function MatrixExplanationPage() {
           >
             <Link href="/membership">
               <button className="px-8 py-4 rounded-xl bg-gradient-to-r from-honey-500 to-honey-600 text-black font-bold text-lg hover:scale-105 transition-transform">
-                Start Your Journey Now
+                {t("matrix.cta.button")}
               </button>
             </Link>
-            <p className="text-gray-400 text-sm mt-4">
-              Join Level 1 for just $130 USDT and start building your network
+            <p className="text-white text-sm mt-4">
+              {t("matrix.cta.subtitle")}
             </p>
           </motion.div>
         </div>
       </div>
       
-      <Footer />
+      <Footer hideSubscription={true} />
     </main>
   );
 }
-

@@ -9,6 +9,7 @@ import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/Button";
 import { MEMBERSHIP_LEVELS } from "@beehive/shared";
 import { getLevelColor, formatNumber } from "@/lib/utils";
+import { useTranslation } from "@/i18n/TranslationProvider";
 import { Crown, Star, Gem, Award, Check, Lock, ArrowRight } from "lucide-react";
 
 // Level tier categories
@@ -18,8 +19,15 @@ const tiers = [
   { name: "Elite", levels: [13, 14, 15, 16, 17, 18, 19] },
 ];
 
+const tierNameKeys = {
+  "Starter": "membership.tier.starter",
+  "Advanced": "membership.tier.advanced",
+  "Elite": "membership.tier.elite",
+};
+
 export default function MembershipPage() {
   const { isConnected, address } = useAccount();
+  const { t } = useTranslation();
   const [selectedLevel, setSelectedLevel] = useState<number | null>(null);
   const [currentUserLevel] = useState(0); // TODO: Fetch from contract
 
@@ -44,29 +52,12 @@ export default function MembershipPage() {
             className="text-center mb-12"
           >
             <h1 className="text-4xl md:text-5xl font-bold mb-4 font-display">
-              <span className="text-gradient-gold">Membership</span>
-              <span className="text-white"> Levels</span>
+              <span className="text-gradient-gold">{t("membership.title")}</span>
             </h1>
-            <p className="text-gray-400 text-lg max-w-2xl mx-auto">
-              Choose your membership level and start earning. Each level unlocks
-              new rewards and earning potential from your network.
+            <p className="text-white text-lg max-w-2xl mx-auto">
+              {t("membership.subtitle")}
             </p>
           </motion.div>
-
-          {/* Connection Status */}
-          {!isConnected && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.1 }}
-              className="bg-honey-500/10 border border-honey-500/30 rounded-xl p-6 mb-12 text-center"
-            >
-              <p className="text-honey-400 mb-4">
-                Connect your wallet to purchase a membership
-              </p>
-              <ConnectButton />
-            </motion.div>
-          )}
 
           {/* Level Tiers */}
           {tiers.map((tier, tierIndex) => (
@@ -80,7 +71,7 @@ export default function MembershipPage() {
                 {tierIndex === 0 && <Award className="w-6 h-6 text-honey-400" />}
                 {tierIndex === 1 && <Star className="w-6 h-6 text-honey-400" />}
                 {tierIndex === 2 && <Crown className="w-6 h-6 text-honey-400" />}
-                {tier.name} Tier
+                {t(tierNameKeys[tier.name as keyof typeof tierNameKeys])}
               </motion.h2>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -91,6 +82,7 @@ export default function MembershipPage() {
                   const isOwned = currentUserLevel >= level.level;
                   const canPurchase = isConnected && !isOwned;
                   const isNext = currentUserLevel + 1 === level.level;
+                  const isLevel1 = level.level === 1;
 
                   return (
                     <motion.div
@@ -110,11 +102,11 @@ export default function MembershipPage() {
                           </div>
                         ) : isNext ? (
                           <div className="px-2 py-1 rounded-full bg-honey-500/20 text-honey-400 text-xs font-medium">
-                            Next
+                            {t("membership.next")}
                           </div>
                         ) : (
                           <div className="w-8 h-8 rounded-full bg-gray-500/20 flex items-center justify-center">
-                            <Lock className="w-4 h-4 text-gray-500" />
+                            <Lock className="w-4 h-4 text-white" />
                           </div>
                         )}
                       </div>
@@ -134,29 +126,41 @@ export default function MembershipPage() {
                         </div>
 
                         {/* Level Name */}
-                        <h3 className="text-xl font-bold text-white mb-1">
-                          {level.name}
+                        <h3 className="text-xl font-bold text-white mb-4">
+                          {(() => {
+                            const translationKey = `levels.${level.level}`;
+                            const translated = t(translationKey);
+                            // If translation returns the key itself, use fallback
+                            return translated === translationKey 
+                              ? (level.nameCn || level.name)
+                              : translated;
+                          })()}
                         </h3>
-                        <p className="text-gray-500 text-sm mb-4">{level.nameCn}</p>
 
                         {/* Stats */}
                         <div className="space-y-3 mb-6">
                           <div className="flex justify-between items-center">
-                            <span className="text-gray-400 text-sm">Price</span>
+                            <span className="text-white text-sm">{t("membership.price")}</span>
                             <span className="text-white font-semibold">
                               ${formatNumber(level.priceUSDT, 0)} USDT
                             </span>
                           </div>
                           <div className="flex justify-between items-center">
-                            <span className="text-gray-400 text-sm">BCC Reward</span>
+                            <span className="text-white text-sm">{t("membership.bccReward")}</span>
                             <span className="text-honey-400 font-semibold">
                               {formatNumber(level.bccReward, 0)} BCC
                             </span>
                           </div>
-                          {level.level >= 2 && (
+                          {/* Empty row for level 1 to match other levels */}
+                          {isLevel1 ? (
+                            <div className="flex justify-between items-center opacity-0">
+                              <span className="text-white text-sm">{t("membership.layerReward")}</span>
+                              <span className="text-green-400 font-semibold">-</span>
+                            </div>
+                          ) : (
                             <div className="flex justify-between items-center">
-                              <span className="text-gray-400 text-sm">
-                                Layer Reward
+                              <span className="text-white text-sm">
+                                {t("membership.layerReward")}
                               </span>
                               <span className="text-green-400 font-semibold">
                                 ${formatNumber(level.priceUSDT, 0)} USDT
@@ -168,7 +172,7 @@ export default function MembershipPage() {
                         {/* Action Button */}
                         {isOwned ? (
                           <div className="text-center py-3 bg-green-500/10 rounded-lg text-green-400 font-medium">
-                            Owned
+                            {t("membership.owned")}
                           </div>
                         ) : (
                           <Button
@@ -176,7 +180,7 @@ export default function MembershipPage() {
                             onClick={() => handlePurchase(level.level)}
                             disabled={!canPurchase}
                           >
-                            {isConnected ? "Purchase" : "Connect Wallet"}
+                            {isConnected ? t("membership.purchase") : t("membership.connectWalletButton")}
                             <ArrowRight
                               size={16}
                               className="group-hover:translate-x-1 transition-transform"

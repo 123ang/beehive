@@ -9,10 +9,30 @@ import { db, members, rewards, transactions, users } from "../db";
 import { eq, desc, sql, count } from "drizzle-orm";
 import { authMiddleware, adminMiddleware } from "../middleware/auth";
 import { rewardService } from "../services/RewardService";
+import adminAuthRouter from "./admin/auth";
+import adminUsersRouter from "./admin/users";
+import adminDashboardRouter from "./admin/dashboard";
+import adminNewsRouter from "./admin/news";
+import adminMerchantsRouter from "./admin/merchants";
+import adminNftCollectionsRouter from "./admin/nft-collections";
+import adminClassesRouter from "./admin/classes";
+import adminAdminsRouter from "./admin/admins";
 
 export const adminRoutes = new Hono();
 
-// Apply auth and admin middleware
+// Admin auth routes (no auth required)
+adminRoutes.route("/auth", adminAuthRouter);
+
+// Admin protected routes
+adminRoutes.route("/users", adminUsersRouter);
+adminRoutes.route("/dashboard", adminDashboardRouter);
+adminRoutes.route("/news", adminNewsRouter);
+adminRoutes.route("/merchants", adminMerchantsRouter);
+adminRoutes.route("/nft-collections", adminNftCollectionsRouter);
+adminRoutes.route("/classes", adminClassesRouter);
+adminRoutes.route("/admins", adminAdminsRouter);
+
+// Apply auth and admin middleware for legacy routes
 adminRoutes.use("/*", authMiddleware, adminMiddleware);
 
 /**

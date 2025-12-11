@@ -22,7 +22,9 @@ interface TreeNode {
 
 export class MatrixService {
   /**
-   * Find placement position for a new member in 3x3 forced matrix
+   * Find placement position for a new member following the Direct Sales Tree algorithm
+   * Phase A: Direct under sponsor if < 3 children
+   * Phase B: Even spillover with round-robin, slot-based algorithm
    */
   async findPlacement(sponsorId: number): Promise<PlacementResult | null> {
     // Phase A: Try to place directly under sponsor
@@ -40,7 +42,8 @@ export class MatrixService {
       }
     }
 
-    // Phase B: Search sponsor's subtree for available slot (BFS)
+    // Phase B: Even Spillover (Round-Robin, Slot-Based Algorithm)
+    // Step 1: Get all candidates in sponsor's entire subtree with < 3 children
     const candidates = await db
       .select({
         memberId: members.id,
@@ -52,23 +55,91 @@ export class MatrixService {
       .where(eq(memberClosure.ancestorId, sponsorId))
       .orderBy(asc(memberClosure.depth), asc(members.joinedAt), asc(members.id));
 
+    // Step 2: Build slots from candidates
+    interface Slot {
+      parentId: number;
+      position: number; // 1, 2, or 3 (the actual position number)
+      slotIndex: number; // 1, 2, or 3 (which free slot this is: 1st free, 2nd free, 3rd free)
+      depth: number;
+      parentJoinedAt: Date;
+    }
+
+    const slots: Slot[] = [];
+
     for (const candidate of candidates) {
       const childCount = await this.getChildCount(candidate.memberId);
-      
-      if (childCount < 3) {
-        const usedPositions = await this.getUsedPositions(candidate.memberId);
-        const availablePosition = [1, 2, 3].find((p) => !usedPositions.includes(p));
+      const usedPositions = await this.getUsedPositions(candidate.memberId);
+      const freeCount = 3 - childCount;
 
-        if (availablePosition) {
-          return {
+      if (freeCount > 0) {
+        // Get available positions in order (1, 2, 3)
+        const availablePositions = [1, 2, 3].filter((p) => !usedPositions.includes(p));
+        
+        // Create slots for each free position
+        // slotIndex = 1 for first free, 2 for second free, 3 for third free
+        for (let slotIndex = 1; slotIndex <= freeCount; slotIndex++) {
+          slots.push({
             parentId: candidate.memberId,
-            position: availablePosition,
-          };
+            position: availablePositions[slotIndex - 1], // actual position number (1, 2, or 3)
+            slotIndex: slotIndex, // which free slot this is (1st, 2nd, or 3rd)
+            depth: candidate.depth,
+            parentJoinedAt: candidate.joinedAt,
+          });
         }
       }
     }
 
-    return null;
+    if (slots.length === 0) {
+      return null; // No available slots
+    }
+
+    // Step 3: Sort slots deterministically
+    // 1) slot index ASC (slot #1 before #2 before #3)
+    // 2) depth ASC (shallower first)
+    // 3) parent's joined_at ASC (earlier first)
+    // 4) parent_id ASC (stable tiebreak)
+    slots.sort((a, b) => {
+      // First: slot index (1st free slot before 2nd free slot before 3rd free slot)
+      if (a.slotIndex !== b.slotIndex) {
+        return a.slotIndex - b.slotIndex;
+      }
+      
+      // Second: depth (shallower first)
+      if (a.depth !== b.depth) {
+        return a.depth - b.depth;
+      }
+      
+      // Third: parent's joined_at (earlier first)
+      const timeDiff = a.parentJoinedAt.getTime() - b.parentJoinedAt.getTime();
+      if (timeDiff !== 0) {
+        return timeDiff;
+      }
+      
+      // Fourth: parent_id (stable tiebreak)
+      return a.parentId - b.parentId;
+    });
+
+    // Step 4: Round-robin selection
+    // Count how many members this sponsor referred BEFORE this new one
+    const referralsBefore = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(members)
+      .where(eq(members.sponsorId, sponsorId));
+
+    const referralsCount = referralsBefore[0]?.count || 0;
+
+    // If < 3, Phase A handled it already, so we're in Phase B
+    // k = referrals_before - 3 + 1 (1-based index into slots)
+    const k = referralsCount - 3 + 1;
+    
+    // Wrap around if past the end
+    const selectedSlotIndex = ((k - 1) % slots.length);
+    const selectedSlot = slots[selectedSlotIndex];
+
+    return {
+      parentId: selectedSlot.parentId,
+      position: selectedSlot.position,
+    };
   }
 
   /**
@@ -87,23 +158,28 @@ export class MatrixService {
       position,
     });
 
-    // 2. Insert self-link in closure table
-    await db
-      .insert(memberClosure)
-      .values({
-        ancestorId: memberId,
-        descendantId: memberId,
-        depth: 0,
-      })
-      .onConflictDoNothing();
+    // 2. Insert self-link in closure table (MySQL: use INSERT IGNORE)
+    try {
+      await db
+        .insert(memberClosure)
+        .values({
+          ancestorId: memberId,
+          descendantId: memberId,
+          depth: 0,
+        });
+    } catch (error: any) {
+      // Ignore duplicate key errors (MySQL doesn't have ON CONFLICT)
+      if (!error.message?.includes("Duplicate entry")) {
+        throw error;
+      }
+    }
 
-    // 3. Insert all ancestor relationships
+    // 3. Insert all ancestor relationships (MySQL: use INSERT IGNORE)
     await db.execute(sql`
-      INSERT INTO member_closure (ancestor_id, descendant_id, depth)
+      INSERT IGNORE INTO member_closure (ancestor_id, descendant_id, depth)
       SELECT ancestor_id, ${memberId}, depth + 1
       FROM member_closure
       WHERE descendant_id = ${parentId}
-      ON CONFLICT DO NOTHING
     `);
 
     // 4. Update member's root_id and sponsor_id

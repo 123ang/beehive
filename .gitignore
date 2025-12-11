@@ -45,3 +45,6 @@ contracts/typechain-types
 *.tsbuildinfo
 .turbo
 
+# Deployment logs
+logs/
+

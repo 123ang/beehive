@@ -120,6 +120,21 @@ class ApiClient {
       body: JSON.stringify({ txHash, level, referrerAddress }),
     });
   }
+
+  // Newsletter endpoints
+  async subscribeNewsletter(email: string) {
+    return this.request<{ message: string }>("/api/newsletter/subscribe", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+  }
+
+  async unsubscribeNewsletter(email: string) {
+    return this.request<{ message: string }>("/api/newsletter/unsubscribe", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+  }
 }
 
 export const api = new ApiClient();

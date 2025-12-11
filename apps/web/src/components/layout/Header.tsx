@@ -1,14 +1,17 @@
 "use client";
 
 import Link from "next/link";
+import { useAccount } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { motion } from "framer-motion";
 import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { LANGUAGES } from "@/i18n/translations";
 import { useTranslation } from "@/i18n/TranslationProvider";
+import { MainNavigation } from "./MainNavigation";
 
 export function Header() {
+  const { isConnected } = useAccount();
   const { lang, setLang, t } = useTranslation();
   const [isLangOpen, setIsLangOpen] = useState(false);
 
@@ -38,6 +41,13 @@ export function Header() {
               Beehive
             </span>
           </Link>
+
+          {/* Main Navigation - Only show when connected */}
+          {isConnected && (
+            <div className="flex-1 flex justify-center">
+              <MainNavigation />
+            </div>
+          )}
 
           {/* Right side - Language & Connect */}
           <div className="flex items-center gap-4">
@@ -95,6 +105,15 @@ export function Header() {
             >
               <span className="text-lg">{currentLang.flag}</span>
             </button>
+
+            {/* Register Button - Only show if not connected */}
+            {!isConnected && (
+              <Link href="/register">
+                <button className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white font-medium transition-all text-sm">
+                  {t("header.register")}
+                </button>
+              </Link>
+            )}
 
             {/* Connect Wallet Button */}
             <ConnectButton

@@ -1,25 +1,60 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import Link from "next/link";
 import { ArrowUp } from "lucide-react";
 import { useTranslation } from "@/i18n/TranslationProvider";
+import { api } from "@/lib/api";
 
-export function Footer() {
+export function Footer({ hideSubscription = false }: { hideSubscription?: boolean }) {
   const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [isSubscribing, setIsSubscribing] = useState(false);
   const [subscribed, setSubscribed] = useState(false);
+  const [alreadySubscribed, setAlreadySubscribed] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Reset form after 5 seconds when subscribed
+  useEffect(() => {
+    if (subscribed || alreadySubscribed) {
+      const timer = setTimeout(() => {
+        setSubscribed(false);
+        setAlreadySubscribed(false);
+        setEmail("");
+        setError(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [subscribed, alreadySubscribed]);
 
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return;
+    
     setIsSubscribing(true);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    setIsSubscribing(false);
-    setSubscribed(true);
-    setEmail("");
+    setError(null);
+
+    try {
+      const response = await api.subscribeNewsletter(email);
+      
+      if (response.success) {
+        // Check if it's an already subscribed response
+        if ((response as any).alreadySubscribed) {
+          setAlreadySubscribed(true);
+        } else {
+          setSubscribed(true);
+        }
+        setEmail("");
+      } else {
+        setError(response.error || "Failed to subscribe. Please try again.");
+      }
+    } catch (err: any) {
+      console.error("Subscription error:", err);
+      setError("Failed to subscribe. Please try again later.");
+    } finally {
+      setIsSubscribing(false);
+    }
   };
 
   const scrollToTop = () => {
@@ -39,11 +74,12 @@ export function Footer() {
       
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Stay Updated - One Row */}
+        {!hideSubscription && (
         <div className="mb-12">
           <h3 className="text-xl font-bold text-white mb-4 font-display text-center">
             {t("footer.stayUpdated")}
           </h3>
-          <p className="text-gray-400 text-sm mb-4 text-center">
+          <p className="text-white text-sm mb-4 text-center">
             {t("footer.subscribeText")}
           </p>
           
@@ -55,16 +91,25 @@ export function Footer() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder={t("footer.emailPlaceholder")}
                 className="flex-1 px-4 py-3 rounded-xl bg-white/5 border border.white/10 text-white placeholder-gray-500 focus:outline-none focus:border-honey-500/50 focus:ring-1 focus:ring-honey-500/50 transition-all"
-                disabled={isSubscribing || subscribed}
+                disabled={isSubscribing || subscribed || alreadySubscribed}
               />
               <button
                 type="submit"
-                disabled={isSubscribing || subscribed || !email}
+                disabled={isSubscribing || subscribed || alreadySubscribed || !email}
                 className="px-6 py-3 rounded-xl bg-gradient-to-r from-honey-500 to-honey-600 text-black font-semibold hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isSubscribing ? "..." : subscribed ? "✓" : t("footer.subscribeButton")}
+                {isSubscribing ? "..." : (subscribed || alreadySubscribed) ? "✓" : t("footer.subscribeButton")}
               </button>
             </div>
+            {error && (
+              <motion.p
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-red-400 text-sm text-center"
+              >
+                {error}
+              </motion.p>
+            )}
             {subscribed && (
               <motion.p
                 initial={{ opacity: 0, y: -10 }}
@@ -74,11 +119,21 @@ export function Footer() {
                 {t("footer.subscribedThankYou")}
               </motion.p>
             )}
-            <p className="text-gray-500 text-xs text-center">
+            {alreadySubscribed && (
+              <motion.p
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-yellow-400 text-sm text-center"
+              >
+                {t("footer.alreadySubscribed")}
+              </motion.p>
+            )}
+            <p className="text-white text-xs text-center">
               {t("footer.privacy")}
             </p>
           </form>
         </div>
+        )}
 
         {/* Follow Us and Back to Top */}
         <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-8">
@@ -116,10 +171,16 @@ export function Footer() {
         </div>
 
         {/* Bottom */}
-        <div className="mt-12 pt-8 border-t border-white/5 text-center">
+        <div className="mt-12 pt-8 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-gray-500 text-sm">
             {t("footer.copyright")}
           </p>
+          <Link
+            href="/admin/login"
+            className="text-gray-500 hover:text-honey-400 text-sm transition-colors"
+          >
+            Admin
+          </Link>
         </div>
       </div>
     </footer>

@@ -18,7 +18,7 @@ export const PENDING_REWARD_EXPIRY_MS = 72 * 60 * 60 * 1000;
 
 // Membership level definitions
 export const MEMBERSHIP_LEVELS: MembershipLevel[] = [
-  { level: 1, name: 'Warrior', nameCn: '战士', priceUSDT: 130, bccReward: 500, active: true },
+  { level: 1, name: 'Warrior', nameCn: '勇士', priceUSDT: 130, bccReward: 500, active: true },
   { level: 2, name: 'Bronze', nameCn: '青铜', priceUSDT: 150, bccReward: 100, active: true },
   { level: 3, name: 'Silver', nameCn: '白银', priceUSDT: 200, bccReward: 200, active: true },
   { level: 4, name: 'Gold', nameCn: '黄金', priceUSDT: 250, bccReward: 300, active: true },
@@ -29,13 +29,13 @@ export const MEMBERSHIP_LEVELS: MembershipLevel[] = [
   { level: 9, name: 'Grandmaster', nameCn: '宗师', priceUSDT: 500, bccReward: 800, active: true },
   { level: 10, name: 'Starlight', nameCn: '星耀', priceUSDT: 550, bccReward: 900, active: true },
   { level: 11, name: 'Epic', nameCn: '史诗', priceUSDT: 600, bccReward: 1000, active: true },
-  { level: 12, name: 'Legend', nameCn: '传说', priceUSDT: 650, bccReward: 1100, active: true },
-  { level: 13, name: 'Supreme King', nameCn: '无上王者', priceUSDT: 700, bccReward: 1200, active: true },
-  { level: 14, name: 'Peerless King', nameCn: '绝世王者', priceUSDT: 750, bccReward: 1300, active: true },
+  { level: 12, name: 'Legend', nameCn: '殿堂', priceUSDT: 650, bccReward: 1100, active: true },
+  { level: 13, name: 'Supreme King', nameCn: '最强王者', priceUSDT: 700, bccReward: 1200, active: true },
+  { level: 14, name: 'Peerless King', nameCn: '无双王者', priceUSDT: 750, bccReward: 1300, active: true },
   { level: 15, name: 'Glory King', nameCn: '荣耀王者', priceUSDT: 800, bccReward: 1400, active: true },
-  { level: 16, name: 'Legendary', nameCn: '神话', priceUSDT: 850, bccReward: 1500, active: true },
-  { level: 17, name: 'Supreme', nameCn: '至尊', priceUSDT: 900, bccReward: 1600, active: true },
-  { level: 18, name: 'Mythic', nameCn: '神话级', priceUSDT: 950, bccReward: 900, active: true },
+  { level: 16, name: 'Legendary', nameCn: '传奇主宰', priceUSDT: 850, bccReward: 1500, active: true },
+  { level: 17, name: 'Supreme', nameCn: '至尊主宰', priceUSDT: 900, bccReward: 1600, active: true },
+  { level: 18, name: 'Mythic', nameCn: '至尊神话', priceUSDT: 950, bccReward: 900, active: true },
   { level: 19, name: 'Mythic Apex', nameCn: '神话巅峰', priceUSDT: 1000, bccReward: 1950, active: true },
 ];
 
