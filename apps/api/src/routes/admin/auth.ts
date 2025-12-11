@@ -101,9 +101,16 @@ adminAuthRouter.post("/login", async (c) => {
         },
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Admin login error:", error);
-    return c.json({ error: "Internal server error" }, 500);
+    // Return more detailed error in development, generic in production
+    const errorMessage = process.env.NODE_ENV === "production" 
+      ? "Internal server error" 
+      : error?.message || String(error);
+    return c.json({ 
+      error: errorMessage,
+      details: process.env.NODE_ENV !== "production" ? error?.stack : undefined
+    }, 500);
   }
 });
 

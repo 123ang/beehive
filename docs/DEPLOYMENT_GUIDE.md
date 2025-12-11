@@ -613,8 +613,17 @@ ls -la dist/index.js
 
 ### 7.2 Build Web (Next.js)
 
+**⚠️ IMPORTANT: Make sure `.env` file has `NEXT_PUBLIC_WALLET_CONNECT_ID` set before building!**
+
 ```bash
 cd /root/projects/beehive/apps/web
+
+# Verify environment variable is set
+grep NEXT_PUBLIC_WALLET_CONNECT_ID ../../.env
+
+# If not set, add it to .env file:
+# NEXT_PUBLIC_WALLET_CONNECT_ID=bbef8141df63638e7cd94f8b9c098b68
+
 pnpm install  # If dependencies aren't installed
 pnpm build    # This creates .next folder
 ```
@@ -624,7 +633,10 @@ Verify the build:
 ls -la .next
 ```
 
-**Note:** The build process may take a few minutes. Make sure both builds complete successfully before proceeding.
+**Note:** 
+- The build process may take a few minutes. 
+- `NEXT_PUBLIC_*` environment variables must be set **before** building - they are baked into the build at compile time.
+- If you change `NEXT_PUBLIC_*` variables, you must rebuild the frontend.
 
 ---
 
@@ -941,7 +953,38 @@ sudo netstat -tulpn | grep :4001
 pm2 restart all
 ```
 
-### 12.2 Database Connection Issues
+### 12.2 500 Internal Server Error (Admin Login)
+
+If you get 500 error when logging into admin panel:
+
+1. **Check API logs for actual error:**
+   ```bash
+   pm2 logs beehive-api --lines 100
+   ```
+
+2. **Verify database tables exist:**
+   ```bash
+   mysql -u beehive_user -p beehive -e "SHOW TABLES LIKE 'admins';"
+   ```
+
+3. **If tables missing, push schema:**
+   ```bash
+   cd /root/projects/beehive/apps/api
+   pnpm db:push
+   ```
+
+4. **If no admin users, run seed:**
+   ```bash
+   pnpm db:seed
+   ```
+
+5. **Default admin credentials:**
+   - Email: `admin@beehive.io`
+   - Password: `admin123`
+
+See `docs/TROUBLESHOOTING_500.md` for detailed troubleshooting.
+
+### 12.3 Database Connection Issues
 
 ```bash
 # Test MySQL connection
