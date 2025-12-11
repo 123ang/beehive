@@ -18,7 +18,7 @@ const __dirname = dirname(__filename);
 // Load environment variables from .env file (optional)
 let envVars = {};
 try {
-  const envPath = resolve(__dirname, "../../.env");
+  const envPath = resolve(__dirname, "../../../.env");
   const envFile = readFileSync(envPath, "utf-8");
   const envLines = envFile.split("\n");
   

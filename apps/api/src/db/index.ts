@@ -24,6 +24,11 @@ function parseConnectionString(url: string) {
   // URL automatically decodes %40 to @, so password should be correct
   const password = parsed.password; // This will be "920214@Ang" if URL had "920214%40Ang"
   
+  // Debug logging (remove in production)
+  if (process.env.NODE_ENV !== "production") {
+    console.log(`🔍 Parsed password: "${password}" (length: ${password?.length || 0})`);
+  }
+  
   return {
     host: parsed.hostname,
     port: parseInt(parsed.port) || 3306,

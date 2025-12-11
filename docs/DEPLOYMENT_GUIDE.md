@@ -357,6 +357,7 @@ REDIS_URL=redis://localhost:6379
 JWT_SECRET=eRzHLgIi7aeJLFp0Rwb2D6FBTwhu6wyXlIc+iHn7Teg=
 
 # API Configuration
+# Note: Using port 4001 to avoid conflicts with existing processes
 API_PORT=4001
 NODE_ENV=production
 

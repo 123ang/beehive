@@ -12,10 +12,10 @@ import { dirname, resolve } from "path";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Load .env file
+// Load .env file from project root (3 levels up from scripts/)
 let envVars = {};
 try {
-  const envPath = resolve(__dirname, "../../.env");
+  const envPath = resolve(__dirname, "../../../.env");
   const envFile = readFileSync(envPath, "utf-8");
   const envLines = envFile.split("\n");
   
@@ -29,8 +29,12 @@ try {
       envVars[key] = value;
     }
   }
+  console.log("✅ Loaded .env file from:", envPath);
+  console.log("   DATABASE_URL found:", !!envVars.DATABASE_URL);
 } catch (error) {
-  console.warn("Could not load .env file");
+  console.warn("⚠️ Could not load .env file:", error.message);
+  console.warn("   Looking for .env at:", resolve(__dirname, "../../../.env"));
+  console.warn("   Will use default connection string");
 }
 
 // Get DATABASE_URL
@@ -57,13 +61,19 @@ console.log("\nConnection config:");
 console.log("  Host:", config.host);
 console.log("  Port:", config.port);
 console.log("  User:", config.user);
-console.log("  Password:", config.password ? `${config.password.substring(0, 3)}***` : "(empty)");
+console.log("  Password length:", config.password ? config.password.length : 0);
+console.log("  Password (first 3 chars):", config.password ? config.password.substring(0, 3) : "(empty)");
+console.log("  Password (last 3 chars):", config.password ? config.password.substring(config.password.length - 3) : "(empty)");
 console.log("  Database:", config.database);
+console.log("\n🔍 Debug: Full password (for testing):", config.password);
 
 async function testConnection() {
   let connection;
   try {
     console.log("\nAttempting to connect...");
+    console.log("🔍 Debug - Password being used:", JSON.stringify(config.password));
+    console.log("🔍 Debug - Expected password: '920214@Ang'");
+    console.log("🔍 Debug - Passwords match:", config.password === "920214@Ang");
     connection = await mysql.createConnection(config);
     
     console.log("✅ Connection successful!");
