@@ -29,9 +29,12 @@ try {
       }
     }
   }
+  console.log("✅ Loaded .env file from:", envPath);
+  console.log("DATABASE_URL:", process.env.DATABASE_URL ? "Set" : "Not set");
 } catch (error) {
   // .env file not found or can't be read - use system/PM2 environment variables
   // This is fine in production where PM2 sets env vars
+  console.warn("⚠️ Could not load .env file, using system/PM2 environment variables");
 }
 
 import { serve } from "@hono/node-server";

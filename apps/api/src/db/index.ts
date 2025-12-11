@@ -9,7 +9,14 @@ import * as schema from "./schema";
 // No need to load again here - they're already in process.env
 
 // Connection string from environment
-const connectionString = process.env.DATABASE_URL || "mysql://root:@localhost:3306/beehive";
+// Default to beehive_user if DATABASE_URL not set
+const connectionString = process.env.DATABASE_URL || "mysql://beehive_user:920214%40Ang@localhost:3306/beehive";
+
+// Log connection info (without password) for debugging
+if (process.env.NODE_ENV !== "production") {
+  const url = new URL(connectionString);
+  console.log(`Database connection: ${url.username}@${url.hostname}:${url.port}/${url.pathname.slice(1)}`);
+}
 
 // Parse connection string
 function parseConnectionString(url: string) {
@@ -25,6 +32,9 @@ function parseConnectionString(url: string) {
 
 // Create MySQL connection pool
 const poolConfig = parseConnectionString(connectionString);
+
+// Log connection config (without password) for debugging
+console.log(`🔌 Connecting to MySQL: ${poolConfig.user}@${poolConfig.host}:${poolConfig.port}/${poolConfig.database}`);
 
 const pool = mysql.createPool({
   ...poolConfig,
