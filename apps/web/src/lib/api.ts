@@ -2,7 +2,9 @@
 // API CLIENT
 // ============================================
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+import { getApiUrl } from "./apiUrl";
+
+const API_BASE = getApiUrl();
 
 interface ApiResponse<T> {
   success: boolean;

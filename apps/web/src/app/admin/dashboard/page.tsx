@@ -49,9 +49,10 @@ export default function AdminDashboardPage() {
 
   const fetchDashboardData = async (token: string) => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-      const response = await fetch(
-        `${apiUrl}/api/admin/dashboard/overview`,
+      // Use relative path in production (Nginx will proxy), absolute URL in development
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
+      const apiPath = apiUrl ? `${apiUrl}/api/admin/dashboard/overview` : "/api/admin/dashboard/overview";
+      const response = await fetch(apiPath,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -66,7 +67,7 @@ export default function AdminDashboardPage() {
         console.error("Non-JSON response:", text.substring(0, 200));
         throw new Error(
           `API server returned ${contentType || "unknown format"}. ` +
-          `Status: ${response.status}. Make sure the API server is running on ${apiUrl}`
+          `Status: ${response.status}. Make sure the API server is running${apiUrl ? ` on ${apiUrl}` : ""}`
         );
       }
 

@@ -19,9 +19,10 @@ export default function AdminLoginPage() {
     setLoading(true);
 
     try {
-      // Use Next.js rewrite proxy (works in both dev and prod)
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-      const response = await fetch(`${apiUrl}/api/admin/auth/login`, {
+      // Use relative path in production (Nginx will proxy), absolute URL in development
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
+      const apiPath = apiUrl ? `${apiUrl}/api/admin/auth/login` : "/api/admin/auth/login";
+      const response = await fetch(apiPath, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -36,7 +37,7 @@ export default function AdminLoginPage() {
         console.error("Non-JSON response:", text.substring(0, 200));
         throw new Error(
           `API server returned ${contentType || "unknown format"}. ` +
-          `Make sure the API server is running on ${apiUrl}`
+          `Make sure the API server is running${apiUrl ? ` on ${apiUrl}` : ""}`
         );
       }
 

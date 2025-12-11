@@ -361,7 +361,15 @@ API_PORT=4001
 NODE_ENV=production
 
 # Frontend Configuration
-NEXT_PUBLIC_API_URL=https://api.beehive-lifestyle.info
+# IMPORTANT: Leave this EMPTY or unset in production if using same domain
+# The frontend will use relative paths (/api/*) which Nginx will proxy to the API backend
+# NEXT_PUBLIC_API_URL=
+# 
+# Only set this if you want to use a separate API subdomain:
+# NEXT_PUBLIC_API_URL=https://api.beehive-lifestyle.info
+# 
+# Or if using same domain with full URL:
+# NEXT_PUBLIC_API_URL=https://beehive-lifestyle.info/api
 NEXT_PUBLIC_CHAIN_ID=42161
 NEXT_PUBLIC_WALLET_CONNECT_ID=bbef8141df63638e7cd94f8b9c098b68
 

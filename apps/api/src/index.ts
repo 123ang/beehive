@@ -27,6 +27,9 @@ const app = new Hono();
 app.use("*", cors({
   origin: [
     "http://localhost:3000",
+    "http://localhost:3001",
+    "https://beehive-lifestyle.info",
+    "https://www.beehive-lifestyle.info",
     "https://beehive.io",
     "https://www.beehive.io",
   ],

@@ -6,10 +6,26 @@ const nextConfig = {
     domains: ["api.beehive.io", "ipfs.io"],
   },
   async rewrites() {
+    // In production, if NEXT_PUBLIC_API_URL is not set, proxy to localhost:4001
+    // In development, use the environment variable or default to localhost:4000
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+    if (apiUrl && !apiUrl.startsWith("/")) {
+      // Absolute URL - proxy to external API
+      return [
+        {
+          source: "/api/:path*",
+          destination: `${apiUrl}/api/:path*`,
+        },
+      ];
+    }
+    // No API URL set or relative path - proxy to local API server
+    const defaultApiUrl = process.env.NODE_ENV === "production" 
+      ? "http://localhost:4001" 
+      : "http://localhost:4000";
     return [
       {
         source: "/api/:path*",
-        destination: `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000"}/api/:path*`,
+        destination: `${defaultApiUrl}/api/:path*`,
       },
     ];
   },
