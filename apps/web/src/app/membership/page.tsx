@@ -12,6 +12,7 @@ import { getLevelColor, formatNumber } from "@/lib/utils";
 import { useTranslation } from "@/i18n/TranslationProvider";
 import { api } from "@/lib/api";
 import { Crown, Star, Gem, Award, Check, Lock, ArrowRight } from "lucide-react";
+import { PurchaseModal } from "@/components/web3/PurchaseModal";
 
 // Level tier categories
 const tiers = [
@@ -59,10 +60,44 @@ export default function MembershipPage() {
   }, [isConnected, address]);
 
   const handlePurchase = async (level: number) => {
-    if (!isConnected) return;
+    if (!isConnected || !address) return;
+    
+    // For Level 1, need a referrer - get from dashboard or use a default
+    // For upgrades, use existing sponsor
+    let referrer = address; // Default fallback
+    
+    try {
+      const dashboard = await api.getDashboard(address);
+      if (dashboard.success && dashboard.data?.sponsor?.walletAddress) {
+        referrer = dashboard.data.sponsor.walletAddress;
+      } else if (level === 1) {
+        // For Level 1, we need a referrer - show error or get from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const refCode = urlParams.get("ref");
+        if (refCode) {
+          // Validate referral code and get sponsor address
+          // For now, we'll require referrer to be passed
+          alert("Please provide a referrer address for Level 1 purchase");
+          return;
+        }
+      }
+    } catch (error) {
+      console.error("Failed to get referrer:", error);
+    }
+    
     setSelectedLevel(level);
-    // TODO: Implement purchase logic
-    console.log("Purchasing level:", level);
+  };
+
+  const handlePurchaseSuccess = () => {
+    setSelectedLevel(null);
+    // Refetch user level
+    if (isConnected && address) {
+      api.getDashboard(address).then((response) => {
+        if (response.success && response.data) {
+          setCurrentUserLevel(response.data.currentLevel || 0);
+        }
+      });
+    }
   };
 
   return (
@@ -107,10 +142,16 @@ export default function MembershipPage() {
                   if (!level) return null;
 
                   const isOwned = currentUserLevel >= level.level;
-                  const isDisabled = isConnected && level.level <= currentUserLevel;
-                  const canPurchase = isConnected && !isOwned && !isDisabled;
-                  const isNext = currentUserLevel + 1 === level.level;
+                  const isNextLevel = currentUserLevel + 1 === level.level;
+                  const isLocked = isConnected && level.level > currentUserLevel + 1;
+                  const canPurchase = isConnected && isNextLevel && !isOwned;
                   const isLevel1 = level.level === 1;
+                  
+                  // Determine unlock message for locked levels
+                  const requiredLevel = level.level - 1;
+                  const unlockMessage = isLocked 
+                    ? t("membership.unlockMessage", { level: requiredLevel })
+                    : null;
 
                   return (
                     <motion.div
@@ -119,7 +160,7 @@ export default function MembershipPage() {
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.5, delay: index * 0.1 }}
                       className={`level-card ${isOwned ? "active" : ""} ${
-                        (isDisabled || (!canPurchase && !isOwned)) ? "locked" : ""
+                        (isLocked || (!canPurchase && !isOwned && !isNextLevel)) ? "locked" : ""
                       }`}
                     >
                       {/* Status Badge */}
@@ -128,7 +169,7 @@ export default function MembershipPage() {
                           <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
                             <Check className="w-4 h-4 text-green-400" />
                           </div>
-                        ) : isNext ? (
+                        ) : isNextLevel ? (
                           <div className="px-2 py-1 rounded-full bg-honey-500/20 text-honey-400 text-xs font-medium">
                             {t("membership.next")}
                           </div>
@@ -202,18 +243,20 @@ export default function MembershipPage() {
                           <div className="text-center py-3 bg-green-500/10 rounded-lg text-green-400 font-medium">
                             {t("membership.owned")}
                           </div>
+                        ) : isLocked ? (
+                          <div className="text-center py-3 bg-gray-500/10 rounded-lg text-gray-400 text-sm">
+                            {unlockMessage || t("membership.locked")}
+                          </div>
                         ) : (
                           <Button
                             className="w-full group"
                             onClick={() => handlePurchase(level.level)}
-                            disabled={!canPurchase || isDisabled}
+                            disabled={!canPurchase}
                           >
-                            {isDisabled
-                              ? t("membership.owned")
-                              : isConnected
+                            {isConnected
                               ? t("membership.purchase")
                               : t("membership.connectWalletButton")}
-                            {!isDisabled && (
+                            {canPurchase && (
                               <ArrowRight
                                 size={16}
                                 className="group-hover:translate-x-1 transition-transform"
@@ -238,6 +281,17 @@ export default function MembershipPage() {
       </section>
 
       <Footer />
+
+      {/* Purchase Modal */}
+      {selectedLevel && isConnected && address && (
+        <PurchaseModal
+          isOpen={!!selectedLevel}
+          onClose={() => setSelectedLevel(null)}
+          level={selectedLevel}
+          referrer={address} // TODO: Get actual referrer from dashboard or URL
+          onSuccess={handlePurchaseSuccess}
+        />
+      )}
     </main>
   );
 }

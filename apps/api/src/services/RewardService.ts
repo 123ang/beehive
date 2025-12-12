@@ -66,6 +66,15 @@ export class RewardService {
         status: "instant",
       });
 
+      // Process USDT reward payment from company account
+      const { processUSDTRewardPayment } = await import("../utils/paymentDistribution");
+      await processUSDTRewardPayment(
+        sponsorWallet,
+        directSponsorReward,
+        "direct_sponsor",
+        newMemberWallet
+      );
+
       // Update sponsor's direct referral count
       await db
         .update(members)
@@ -118,6 +127,15 @@ export class RewardService {
         status: "instant",
         layerNumber: level,
       });
+
+      // Process USDT reward payment from company account
+      const { processUSDTRewardPayment } = await import("../utils/paymentDistribution");
+      await processUSDTRewardPayment(
+        upline.walletAddress,
+        rewardAmount,
+        "layer_payout",
+        memberWallet
+      );
     } else {
       // Pending reward with 72-hour expiration
       const expiresAt = new Date(Date.now() + PENDING_REWARD_EXPIRY_MS);
@@ -217,7 +235,20 @@ export class RewardService {
           lte(rewards.layerNumber, newLevel)
         )
       )
-      .returning({ id: rewards.id });
+      .returning({ id: rewards.id, amount: rewards.amount, currency: rewards.currency, sourceWallet: rewards.sourceWallet, layerNumber: rewards.layerNumber });
+
+    // Process USDT payments for released layer rewards
+    const { processUSDTRewardPayment } = await import("../utils/paymentDistribution");
+    for (const reward of layerResult) {
+      if (reward.amount && reward.currency === "USDT") {
+        await processUSDTRewardPayment(
+          wallet,
+          parseFloat(reward.amount),
+          "layer_payout",
+          reward.sourceWallet || undefined
+        );
+      }
+    }
 
     let releasedCount = layerResult.length;
 
@@ -236,7 +267,19 @@ export class RewardService {
             eq(rewards.rewardType, "direct_sponsor")
           )
         )
-        .returning({ id: rewards.id });
+        .returning({ id: rewards.id, amount: rewards.amount, currency: rewards.currency, sourceWallet: rewards.sourceWallet });
+
+      // Process USDT payments for released direct sponsor rewards
+      for (const reward of directResult) {
+        if (reward.amount && reward.currency === "USDT") {
+          await processUSDTRewardPayment(
+            wallet,
+            parseFloat(reward.amount),
+            "direct_sponsor",
+            reward.sourceWallet || undefined
+          );
+        }
+      }
 
       releasedCount += directResult.length;
     }

@@ -259,7 +259,7 @@ export default function AdminNewsNewPage() {
             {/* Description */}
             <div>
               <label className="block text-sm font-medium text-gray-400 mb-2">
-                {t("admin.news.descriptionLabel") || "Description"} ({currentLang.toUpperCase()})
+                {t("admin.news.descriptionLabel")}
               </label>
               <textarea
                 value={formData.translations[currentLang]?.description || ""}
@@ -283,7 +283,7 @@ export default function AdminNewsNewPage() {
             {/* Rich Text Editor */}
             <div>
               <label className="block text-sm font-medium text-gray-400 mb-2">
-                {t("admin.news.contentLabel").replace("{lang}", currentLang.toUpperCase())}
+                {t("admin.news.contentLabel")}
               </label>
               <div className="bg-white border border-gray-300 rounded-lg overflow-hidden">
                 {/* Toolbar */}

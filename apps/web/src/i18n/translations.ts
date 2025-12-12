@@ -337,6 +337,8 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     "membership.next": "Next",
     "membership.purchase": "Purchase",
     "membership.connectWalletButton": "Connect Wallet",
+    "membership.locked": "Locked",
+    "membership.unlockMessage": "Please buy Level {level} to unlock",
     
     // Register Page
     "register.back": "Back to Home",
@@ -825,6 +827,8 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     "membership.next": "下一个",
     "membership.purchase": "购买",
     "membership.connectWalletButton": "连接钱包",
+    "membership.locked": "已锁定",
+    "membership.unlockMessage": "请先购买等级 {level} 以解锁",
     
     // Register Page
     "register.back": "返回首页",
@@ -1360,6 +1364,8 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     "membership.next": "下一個",
     "membership.purchase": "購買",
     "membership.connectWalletButton": "連接錢包",
+    "membership.locked": "已鎖定",
+    "membership.unlockMessage": "請先購買等級 {level} 以解鎖",
     
     // Register Page
     "register.back": "返回首頁",
@@ -1727,6 +1733,8 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     "membership.next": "ถัดไป",
     "membership.purchase": "ซื้อ",
     "membership.connectWalletButton": "เชื่อมต่อกระเป๋าเงิน",
+    "membership.locked": "ล็อค",
+    "membership.unlockMessage": "กรุณาซื้อระดับ {level} เพื่อปลดล็อค",
     
     // Register Page
     "register.back": "กลับหน้าหลัก",
@@ -2009,6 +2017,8 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     "membership.next": "Seterusnya",
     "membership.purchase": "Beli",
     "membership.connectWalletButton": "Sambungkan Dompet",
+    "membership.locked": "Terkunci",
+    "membership.unlockMessage": "Sila beli Tahap {level} untuk membuka kunci",
     
     // Register Page
     "register.back": "Kembali ke Laman Utama",
@@ -2349,6 +2359,8 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     "membership.next": "次",
     "membership.purchase": "購入",
     "membership.connectWalletButton": "ウォレットを接続",
+    "membership.locked": "ロック",
+    "membership.unlockMessage": "レベル {level} を購入してロックを解除してください",
     
     // Register Page
     "register.back": "ホームに戻る",
@@ -2689,6 +2701,8 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     "membership.next": "다음",
     "membership.purchase": "구매",
     "membership.connectWalletButton": "지갑 연결",
+    "membership.locked": "잠김",
+    "membership.unlockMessage": "레벨 {level}을 구매하여 잠금을 해제하세요",
     
     // Register Page
     "register.back": "홈으로 돌아가기",

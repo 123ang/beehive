@@ -38,14 +38,14 @@ export const users = mysqlTable(
     isAdmin: boolean("is_admin").default(false),
     membershipLevel: int("membership_level").default(0),
     status: varchar("status", { length: 20 }).default("active"), // active, suspended, inactive
-    totalSpent: decimal("total_spent", { precision: 18, scale: 6 }).default("0"),
-    totalRewards: decimal("total_rewards", { precision: 18, scale: 6 }).default("0"),
+    totalSpent: decimal("total_spent", { precision: 36, scale: 18 }).default("0"),
+    totalRewards: decimal("total_rewards", { precision: 36, scale: 18 }).default("0"),
     referralCode: varchar("referral_code", { length: 50 }).unique(),
     sponsorId: int("sponsor_id"),
     sponsorAddress: varchar("sponsor_address", { length: 42 }),
     memberId: varchar("member_id", { length: 50 }).unique(),
     referralCount: int("referral_count").default(0),
-    referralRewardsEarned: decimal("referral_rewards_earned", { precision: 18, scale: 6 }).default("0"),
+    referralRewardsEarned: decimal("referral_rewards_earned", { precision: 36, scale: 18 }).default("0"),
     isBulkImported: boolean("is_bulk_imported").default(false),
     bulkImportId: int("bulk_import_id"),
     createdAt: timestamp("created_at").defaultNow(),
@@ -71,16 +71,21 @@ export const members = mysqlTable(
     rootId: int("root_id"),
     sponsorId: int("sponsor_id"),
     currentLevel: int("current_level").default(0),
-    totalInflow: decimal("total_inflow", { precision: 18, scale: 6 }).default("0"),
-    totalOutflowUsdt: decimal("total_outflow_usdt", { precision: 18, scale: 6 }).default("0"),
-    totalOutflowBcc: int("total_outflow_bcc").default(0),
+    totalInflow: decimal("total_inflow", { precision: 36, scale: 18 }).default("0"),
+    totalOutflowUsdt: decimal("total_outflow_usdt", { precision: 36, scale: 18 }).default("0"),
+    totalOutflowBcc: decimal("total_outflow_bcc", { precision: 36, scale: 18 }).default("0"),
+    bccBalance: decimal("bcc_balance", { precision: 36, scale: 18 }).default("0"), // Current BCC balance in wallet
     directSponsorCount: int("direct_sponsor_count").default(0),
+    memberId: varchar("member_id", { length: 50 }).unique(),
+    referralCode: varchar("referral_code", { length: 50 }).unique(),
     joinedAt: timestamp("joined_at").defaultNow(),
   },
   (table) => ({
     walletIdx: uniqueIndex("members_wallet_idx").on(table.walletAddress),
     sponsorIdx: index("members_sponsor_idx").on(table.sponsorId),
     levelIdx: index("members_level_idx").on(table.currentLevel),
+    referralCodeIdx: uniqueIndex("members_referral_code_idx").on(table.referralCode),
+    memberIdIdx: uniqueIndex("members_member_id_idx").on(table.memberId),
   })
 );
 
@@ -143,7 +148,7 @@ export const rewards = mysqlTable(
     recipientWallet: varchar("recipient_wallet", { length: 42 }).notNull(),
     sourceWallet: varchar("source_wallet", { length: 42 }),
     rewardType: varchar("reward_type", { length: 20 }).notNull(), // direct_sponsor, layer_payout, bcc_token
-    amount: decimal("amount", { precision: 18, scale: 6 }).notNull(),
+    amount: decimal("amount", { precision: 36, scale: 18 }).notNull(), // Changed from 18,18 to 36,18 to support larger values
     currency: varchar("currency", { length: 10 }).notNull(), // USDT, BCC
     status: varchar("status", { length: 20 }).notNull(), // instant, pending, claimed, expired
     layerNumber: int("layer_number"),
@@ -169,10 +174,13 @@ export const transactions = mysqlTable(
     id: int("id").primaryKey().autoincrement(),
     walletAddress: varchar("wallet_address", { length: 42 }).notNull(),
     txHash: varchar("tx_hash", { length: 66 }).unique(),
-    level: int("level").notNull(),
+    transactionType: varchar("transaction_type", { length: 20 }).notNull(), // purchase, withdrawal, deposit
+    currency: varchar("currency", { length: 10 }).notNull(), // USDT, BCC
+    level: int("level"), // Optional: for purchase transactions
     amount: decimal("amount", { precision: 18, scale: 6 }).notNull(),
     status: varchar("status", { length: 20 }).default("pending"), // pending, confirmed, failed
     blockNumber: bigint("block_number", { mode: "number" }),
+    notes: text("notes"), // Optional notes for the transaction
     createdAt: timestamp("created_at").defaultNow(),
     confirmedAt: datetime("confirmed_at", { mode: "date", fsp: 6 }),
   },
@@ -180,6 +188,8 @@ export const transactions = mysqlTable(
     walletIdx: index("transactions_wallet_idx").on(table.walletAddress),
     txHashIdx: uniqueIndex("transactions_tx_hash_idx").on(table.txHash),
     statusIdx: index("transactions_status_idx").on(table.status),
+    typeIdx: index("transactions_type_idx").on(table.transactionType),
+    currencyIdx: index("transactions_currency_idx").on(table.currency),
   })
 );
 
@@ -190,8 +200,8 @@ export const levels = mysqlTable("levels", {
   level: int("level").primaryKey(),
   nameEn: varchar("name_en", { length: 50 }).notNull(),
   nameCn: varchar("name_cn", { length: 50 }).notNull(),
-  priceUsdt: decimal("price_usdt", { precision: 18, scale: 6 }).notNull(),
-  bccReward: int("bcc_reward").notNull(),
+  priceUsdt: decimal("price_usdt", { precision: 36, scale: 18 }).notNull(),
+  bccReward: decimal("bcc_reward", { precision: 36, scale: 18 }).notNull(),
   active: boolean("active").default(true),
 });
 
@@ -491,7 +501,7 @@ export const dashboardMetrics = mysqlTable("dashboard_metrics", {
   id: int("id").primaryKey().autoincrement(),
   metricDate: timestamp("metric_date").notNull(),
   metricType: varchar("metric_type", { length: 50 }).notNull(), // revenue, users, rewards, etc.
-  metricValue: decimal("metric_value", { precision: 18, scale: 6 }).notNull(),
+  metricValue: decimal("metric_value", { precision: 36, scale: 18 }).notNull(),
   metadata: text("metadata"), // JSON string for additional context
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => ({
@@ -508,7 +518,7 @@ export const nftCollections = mysqlTable("nft_collections", {
   id: int("id").primaryKey().autoincrement(),
   shortName: varchar("short_name", { length: 50 }).notNull().unique(),
   name: varchar("name", { length: 255 }).notNull(),
-  bccReward: decimal("bcc_reward", { precision: 18, scale: 6 }).notNull(),
+  bccReward: decimal("bcc_reward", { precision: 36, scale: 18 }).notNull(),
   description: text("description"),
   imageUrl: text("image_url"),
   active: boolean("active").default(true),

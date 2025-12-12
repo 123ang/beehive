@@ -70,8 +70,10 @@ export default function RewardsPage() {
   const [isOverviewExpanded, setIsOverviewExpanded] = useState(true);
   const [isCountdownExpanded, setIsCountdownExpanded] = useState(true);
   const [withdrawAmount, setWithdrawAmount] = useState<string>("");
-  const [selectedChain, setSelectedChain] = useState<string>("ethereum");
+  const [selectedChain, setSelectedChain] = useState<string>("bsc");
+  const [selectedCurrency, setSelectedCurrency] = useState<"USDT" | "BCC">("USDT");
   const [availableBalance, setAvailableBalance] = useState<string>("0");
+  const [bccBalance, setBccBalance] = useState<string>("0");
 
   const walletAddress = searchParams.get("address") || address;
 
@@ -92,9 +94,15 @@ export default function RewardsPage() {
     if (result.success && result.data) {
       setRewards(result.data.rewards || []);
       setSummary(result.data.summary || null);
-        // Set available balance from claimable amount
+        // Set available balance from claimable amount (USDT)
         if (result.data.summary?.claimable) {
           setAvailableBalance(result.data.summary.claimable);
+        }
+        // Set BCC balance from summary (use bccBalance if available, otherwise totalBCC)
+        if (result.data.summary?.bccBalance) {
+          setBccBalance(result.data.summary.bccBalance);
+        } else if (result.data.summary?.totalBCC) {
+          setBccBalance(result.data.summary.totalBCC);
         }
     }
     } catch (error) {
@@ -272,13 +280,13 @@ export default function RewardsPage() {
                 </div>
               </div>
             )}
-              </motion.div>
+          </motion.div>
 
           {/* Reward Management Section */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
+                transition={{ delay: 0.1 }}
             className="bg-gray-800/50 rounded-xl border border-gray-700/30 mb-6"
           >
             <div className="p-6 border-b border-gray-700/30">
@@ -291,7 +299,7 @@ export default function RewardsPage() {
               <p className="text-gray-400 text-sm">
                 {t("rewards.management.subtitle") || "Select a category below to view and manage your rewards"}
               </p>
-            </div>
+                </div>
 
             <div className="p-6">
               <div className="flex flex-wrap gap-3">
@@ -346,7 +354,7 @@ export default function RewardsPage() {
                 {loading ? (
                   <div className="flex items-center justify-center py-12">
                     <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-yellow-400"></div>
-                  </div>
+                </div>
                 ) : (
                   <>
                     {activeTab === "pending" && (
@@ -456,10 +464,10 @@ export default function RewardsPage() {
                             <p className="text-gray-400 text-sm max-w-md mx-auto">
                               {t("rewards.rollup.explanation") || "You don't have any rollup rewards at this time. Rollup rewards are created when your downline members fail to claim their rewards within the 72-hour window."}
                             </p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                </div>
+                </div>
+            </div>
+          )}
                     {activeTab === "withdraw" && (
                       <div className="space-y-6">
                         {/* Withdrawal Header */}
@@ -481,21 +489,19 @@ export default function RewardsPage() {
                             <span className="text-gray-400 text-sm">
                               {t("rewards.withdraw.availableBalance") || "Available Balance"}
                             </span>
-                            <RefreshCw className="w-4 h-4 text-gray-400 cursor-pointer hover:text-yellow-400" />
+                            <RefreshCw 
+                              className="w-4 h-4 text-gray-400 cursor-pointer hover:text-yellow-400" 
+                              onClick={fetchRewards}
+                            />
                           </div>
                           <p className="text-yellow-400 text-4xl font-bold mb-2">
-                            ${formatNumber(parseFloat(availableBalance), 2)} USDT
+                            {selectedCurrency === "USDT" 
+                              ? `$${formatNumber(parseFloat(availableBalance), 2)} USDT`
+                              : `${formatNumber(parseFloat(bccBalance), 2)} BCC`
+                            }
                           </p>
                           <p className="text-gray-400 text-sm">
                             {t("rewards.withdraw.wallet") || "Wallet"}: {address ? shortenAddress(address, 8) : "-"}
-                          </p>
-                        </div>
-
-                        {/* Multi-Chain Support */}
-                        <div className="bg-blue-900/20 border border-blue-700/30 rounded-lg p-4 flex items-start gap-3">
-                          <Zap className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
-                          <p className="text-gray-300 text-sm">
-                            {t("rewards.withdraw.multiChain") || "Multi-Chain Support: Withdraw to Ethereum, Arbitrum, Polygon, Optimism, BSC, or Base."}
                           </p>
                         </div>
 
@@ -509,13 +515,9 @@ export default function RewardsPage() {
                               value={selectedChain}
                               onChange={(e) => setSelectedChain(e.target.value)}
                               className="w-full bg-gray-900/50 border border-gray-700/30 rounded-lg px-4 py-3 text-white appearance-none focus:outline-none focus:border-yellow-500/50"
+                              disabled
                             >
-                              <option value="ethereum">Ethereum - 15 USDT fee</option>
-                              <option value="arbitrum">Arbitrum - 5 USDT fee</option>
-                              <option value="polygon">Polygon - 3 USDT fee</option>
-                              <option value="optimism">Optimism - 5 USDT fee</option>
-                              <option value="bsc">BSC - 3 USDT fee</option>
-                              <option value="base">Base - 5 USDT fee</option>
+                              <option value="bsc">BSC (Binance Smart Chain) - 3 USDT fee</option>
                             </select>
                             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
                           </div>
@@ -526,23 +528,33 @@ export default function RewardsPage() {
                           <label className="block text-gray-400 text-sm mb-2">
                             {t("rewards.withdraw.currency") || "Withdrawal Currency"}
                           </label>
-                          <div className="bg-gray-900/50 border border-gray-700/30 rounded-lg p-4 flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-400 to-blue-500 flex items-center justify-center text-white font-bold">
-                              $
-                            </div>
-                            <div className="flex-1">
-                              <p className="text-white font-semibold">USDT (Tether)</p>
-                              <p className="text-gray-400 text-xs">
-                                {t("rewards.withdraw.currencyDesc") || "Stablecoin on Ethereum"}
-                              </p>
-                            </div>
+                          <div className="relative">
+                            <select
+                              value={selectedCurrency}
+                              onChange={(e) => setSelectedCurrency(e.target.value as "USDT" | "BCC")}
+                              className="w-full bg-gray-900/50 border border-gray-700/30 rounded-lg px-4 py-3 text-white appearance-none focus:outline-none focus:border-yellow-500/50"
+                            >
+                              <option value="USDT">USDT (Tether)</option>
+                              <option value="BCC">BCC (Beehive Coin)</option>
+                            </select>
+                            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
                           </div>
+                          {selectedCurrency === "USDT" && (
+                            <p className="text-gray-400 text-xs mt-2">
+                              {t("rewards.withdraw.currencyDesc") || "Stablecoin on BSC"}
+                            </p>
+                          )}
+                          {selectedCurrency === "BCC" && (
+                            <p className="text-gray-400 text-xs mt-2">
+                              Beehive Coin on BSC
+                            </p>
+                          )}
                         </div>
 
                         {/* Withdrawal Amount */}
                         <div>
                           <label className="block text-gray-400 text-sm mb-2">
-                            {t("rewards.withdraw.amount") || "Withdrawal Amount (USDT)"}
+                            {t("rewards.withdraw.amount") || `Withdrawal Amount (${selectedCurrency})`}
                           </label>
                           <input
                             type="number"
@@ -562,7 +574,7 @@ export default function RewardsPage() {
                           className="w-full bg-yellow-600 hover:bg-yellow-700 text-white"
                           disabled={!withdrawAmount || parseFloat(withdrawAmount) <= 0}
                         >
-                          {t("rewards.withdraw.button", { chain: selectedChain.charAt(0).toUpperCase() + selectedChain.slice(1) }) || `Withdraw to ${selectedChain.charAt(0).toUpperCase() + selectedChain.slice(1)}`}
+                          {t("rewards.withdraw.button", { chain: "BSC" }) || `Withdraw ${selectedCurrency} to BSC`}
                           <ArrowRight className="w-4 h-4 ml-2" />
                         </Button>
 
@@ -570,7 +582,7 @@ export default function RewardsPage() {
                         <div className="flex items-start gap-2 text-gray-400 text-xs">
                           <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
                           <p>
-                            {t("rewards.withdraw.disclaimer", { chain: selectedChain.charAt(0).toUpperCase() + selectedChain.slice(1) }) || `Cross-chain withdrawal to ${selectedChain.charAt(0).toUpperCase() + selectedChain.slice(1)} may take 5-15 minutes.`}
+                            {t("rewards.withdraw.disclaimer", { chain: "BSC" }) || `Withdrawal to BSC may take 5-15 minutes.`}
                           </p>
                         </div>
                       </div>
@@ -632,9 +644,9 @@ export default function RewardsPage() {
 
           {/* Pending Rewards Countdown Section - Only show for Pending tab */}
           {activeTab === "pending" && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
               className="bg-gray-800/50 rounded-xl border border-gray-700/30"
             >
@@ -702,8 +714,8 @@ export default function RewardsPage() {
                       </div>
                     </div>
                   ))}
-                </div>
-              )}
+              </div>
+            )}
             </div>
           </motion.div>
           )}

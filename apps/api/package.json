@@ -19,6 +19,11 @@
     "db:reimport": "tsx src/scripts/reimportMembersFromCSV.ts",
     "db:fix-placements": "tsx src/scripts/fixMemberPlacements.ts",
     "db:view-matrix": "tsx src/scripts/viewMatrix.ts",
+    "db:generate-referral-codes": "tsx src/scripts/generateReferralCodes.ts",
+    "db:award-bcc-rewards": "tsx src/scripts/awardBCCRewardsByLevel.ts",
+    "db:fix-reward-amounts": "tsx src/scripts/fixRewardAmounts.ts",
+    "db:fix-member-bcc-balances": "tsx src/scripts/fixMemberBCCBalances.ts",
+    "db:fix-other-decimal-fields": "tsx src/scripts/fixOtherDecimalFields.ts",
     "clean": "rimraf dist"
   },
   "dependencies": {

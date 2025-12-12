@@ -1,9 +1,11 @@
 import { Hono } from "hono";
 import { db } from "../db";
-import { users, referralRelationships } from "../db/schema";
+import { members, users, referralRelationships } from "../db/schema";
 import { eq } from "drizzle-orm";
 import { generateMemberId, generateReferralCode } from "../utils/referralCode";
 import { logActivity, getClientIp, getUserAgent } from "../utils/activityLogger";
+import { awardBCCReward } from "../utils/bccRewards";
+import { createMemberWithPlacement } from "../utils/memberPlacement";
 
 export const referralRoutes = new Hono();
 
@@ -19,45 +21,69 @@ referralRoutes.post("/generate", async (c) => {
       return c.json({ error: "Wallet address required" }, 400);
     }
 
-    // Find user
-    const [user] = await db
+    // Find member
+    const [member] = await db
       .select()
-      .from(users)
-      .where(eq(users.walletAddress, walletAddress.toLowerCase()))
+      .from(members)
+      .where(eq(members.walletAddress, walletAddress.toLowerCase()))
       .limit(1);
 
-    if (!user) {
-      return c.json({ error: "User not found" }, 404);
+    if (!member) {
+      return c.json({ error: "Member not found" }, 404);
     }
 
     // Check if already has referral code
-    if (user.referralCode) {
+    if (member.referralCode) {
       return c.json({
         success: true,
         data: {
-          referralCode: user.referralCode,
-          memberId: user.memberId,
-          referralLink: `${process.env.FRONTEND_URL || "https://beehive-lifestyle.io"}/register?ref=${user.referralCode}`,
+          referralCode: member.referralCode,
+          memberId: member.memberId,
+          referralLink: `${process.env.FRONTEND_URL || "https://beehive-lifestyle.io"}/register?ref=${member.referralCode}`,
         },
       });
     }
 
-    // Generate member ID and referral code
-    const memberId = user.memberId || generateMemberId(user.id);
-    const referralCode = generateReferralCode(memberId);
+    // Generate member ID if not exists
+    const memberId = member.memberId || generateMemberId(member.id);
+    
+    // Generate unique referral code (8 random lowercase alphanumeric)
+    let finalReferralCode: string;
+    let attempts = 0;
+    const maxAttempts = 10;
+    
+    do {
+      finalReferralCode = generateReferralCode();
+      attempts++;
+      
+      // Check if referral code already exists
+      const [existingCode] = await db
+        .select()
+        .from(members)
+        .where(eq(members.referralCode, finalReferralCode))
+        .limit(1);
+      
+      if (!existingCode || existingCode.id === member.id) {
+        break; // Unique code found or belongs to this member
+      }
+      
+      if (attempts >= maxAttempts) {
+        throw new Error(`Failed to generate unique referral code after ${maxAttempts} attempts`);
+      }
+    } while (true);
 
-    // Update user
+    // Update member
     await db
-      .update(users)
-      .set({ memberId, referralCode })
-      .where(eq(users.id, user.id));
+      .update(members)
+      .set({ memberId, referralCode: finalReferralCode })
+      .where(eq(members.id, member.id));
 
     // Log activity
     await logActivity({
       actorType: "user",
       actorId: walletAddress,
       action: "user.wallet_connected",
-      metadata: { memberId, referralCode },
+      metadata: { memberId, referralCode: finalReferralCode },
       ipAddress: getClientIp(c.req.raw.headers),
       userAgent: getUserAgent(c.req.raw.headers),
     });
@@ -65,9 +91,9 @@ referralRoutes.post("/generate", async (c) => {
     return c.json({
       success: true,
       data: {
-        referralCode,
+        referralCode: finalReferralCode,
         memberId,
-        referralLink: `${process.env.FRONTEND_URL || "https://beehive-lifestyle.io"}/register?ref=${referralCode}`,
+        referralLink: `${process.env.FRONTEND_URL || "https://beehive-lifestyle.io"}/register?ref=${finalReferralCode}`,
       },
     });
   } catch (error) {
@@ -86,8 +112,8 @@ referralRoutes.get("/validate/:code", async (c) => {
 
     const [sponsor] = await db
       .select()
-      .from(users)
-      .where(eq(users.referralCode, code))
+      .from(members)
+      .where(eq(members.referralCode, code))
       .limit(1);
 
     if (!sponsor) {
@@ -99,7 +125,7 @@ referralRoutes.get("/validate/:code", async (c) => {
       data: {
         valid: true,
         sponsor: {
-          name: sponsor.name,
+          name: sponsor.username,
           memberId: sponsor.memberId,
         },
       },
@@ -122,18 +148,85 @@ referralRoutes.post("/register", async (c) => {
       return c.json({ error: "Wallet address and referral code required" }, 400);
     }
 
-    // Validate referral code
+    // Validate referral code - find sponsor in members table
     const [sponsor] = await db
       .select()
-      .from(users)
-      .where(eq(users.referralCode, referralCode))
+      .from(members)
+      .where(eq(members.referralCode, referralCode))
       .limit(1);
 
     if (!sponsor) {
       return c.json({ error: "Invalid referral code" }, 400);
     }
 
-    // Check if user already exists
+    // Check if member already exists
+    const [existingMember] = await db
+      .select()
+      .from(members)
+      .where(eq(members.walletAddress, walletAddress.toLowerCase()))
+      .limit(1);
+
+    if (existingMember) {
+      return c.json({ error: "Member already registered" }, 400);
+    }
+
+    // Create member with placement in the matrix
+    const { memberId: newMemberId } = await createMemberWithPlacement(
+      walletAddress.toLowerCase(),
+      1, // Level 1
+      sponsor.walletAddress, // Sponsor wallet
+      name || undefined // Username
+    );
+
+    // Get the created member
+    const [newMember] = await db
+      .select()
+      .from(members)
+      .where(eq(members.id, newMemberId))
+      .limit(1);
+
+    if (!newMember) {
+      return c.json({ error: "Failed to create member" }, 500);
+    }
+
+    // Generate member ID string if not exists
+    const memberIdString = newMember.memberId || generateMemberId(newMember.id);
+    
+    // Generate unique referral code (8 random lowercase alphanumeric)
+    let finalReferralCode: string;
+    let attempts = 0;
+    const maxAttempts = 10;
+    
+    do {
+      finalReferralCode = generateReferralCode();
+      attempts++;
+      
+      // Check if referral code already exists
+      const [existingCode] = await db
+        .select()
+        .from(members)
+        .where(eq(members.referralCode, finalReferralCode))
+        .limit(1);
+      
+      if (!existingCode) {
+        break; // Unique code found
+      }
+      
+      if (attempts >= maxAttempts) {
+        throw new Error(`Failed to generate unique referral code after ${maxAttempts} attempts`);
+      }
+    } while (true);
+
+    // Update member with member ID and referral code
+    await db
+      .update(members)
+      .set({ 
+        memberId: memberIdString,
+        referralCode: finalReferralCode 
+      })
+      .where(eq(members.id, newMember.id));
+
+    // Also create/update user record for consistency (for auth purposes)
     const [existingUser] = await db
       .select()
       .from(users)
@@ -141,55 +234,76 @@ referralRoutes.post("/register", async (c) => {
       .limit(1);
 
     if (existingUser) {
-      return c.json({ error: "User already registered" }, 400);
-    }
-
-    // Create new user
-    const [newUser] = await db
-      .insert(users)
-      .values({
+      // Update existing user
+      await db
+        .update(users)
+        .set({
+          email: email || existingUser.email,
+          name: name || existingUser.name,
+          phone: phone || existingUser.phone,
+          membershipLevel: 1,
+          status: "active",
+        })
+        .where(eq(users.id, existingUser.id));
+    } else {
+      // Create new user record
+      await db.insert(users).values({
         walletAddress: walletAddress.toLowerCase(),
         email: email || null,
         name: name || null,
         phone: phone || null,
         membershipLevel: 1,
         status: "active",
-        sponsorId: sponsor.id,
-        sponsorAddress: sponsor.walletAddress,
-      })
-      .$returningId();
+      });
+    }
 
-    // Generate member ID and referral code for new user
-    const memberId = generateMemberId(newUser.id);
-    const newReferralCode = generateReferralCode(memberId);
+    // Award BCC rewards based on membership level (Level 1 = 500 BCC)
+    await awardBCCReward(
+      walletAddress.toLowerCase(),
+      1, // Level 1 membership
+      sponsor.walletAddress,
+      "Registration BCC reward for Level 1 membership"
+    );
 
-    await db
-      .update(users)
-      .set({ memberId, referralCode: newReferralCode })
-      .where(eq(users.id, newUser.id));
+    // Create referral relationship (using user ID if available, otherwise member ID)
+    const [userForRelationship] = await db
+      .select()
+      .from(users)
+      .where(eq(users.walletAddress, walletAddress.toLowerCase()))
+      .limit(1);
 
-    // Create referral relationship
-    await db.insert(referralRelationships).values({
-      sponsorId: sponsor.id,
-      referredUserId: newUser.id,
-      referralCodeUsed: referralCode,
-      status: "active",
-    });
+    if (userForRelationship) {
+      // Find sponsor's user record
+      const [sponsorUser] = await db
+        .select()
+        .from(users)
+        .where(eq(users.walletAddress, sponsor.walletAddress))
+        .limit(1);
 
-    // Update sponsor's referral count
-    await db
-      .update(users)
-      .set({
-        referralCount: sponsor.referralCount + 1,
-      })
-      .where(eq(users.id, sponsor.id));
+      if (sponsorUser) {
+        await db.insert(referralRelationships).values({
+          sponsorId: sponsorUser.id,
+          referredUserId: userForRelationship.id,
+          referralCodeUsed: referralCode,
+          status: "active",
+        });
+
+        // Update sponsor's referral count
+        await db
+          .update(users)
+          .set({
+            referralCount: (sponsorUser.referralCount || 0) + 1,
+          })
+          .where(eq(users.id, sponsorUser.id));
+      }
+    }
 
     // Log activities
     await logActivity({
       actorType: "user",
       actorId: walletAddress,
       action: "user.register_with_referral",
-      metadata: { sponsorId: sponsor.id, referralCode },
+      metadata: { sponsorId: sponsor.id, referralCode, memberId: newMember.id },
       ipAddress: getClientIp(c.req.raw.headers),
       userAgent: getUserAgent(c.req.raw.headers),
     });
@@ -198,7 +312,7 @@ referralRoutes.post("/register", async (c) => {
       actorType: "user",
       actorId: sponsor.walletAddress,
       action: "user.referred_new_user",
-      metadata: { referredUserId: newUser.id },
+      metadata: { referredMemberId: newMember.id },
       ipAddress: getClientIp(c.req.raw.headers),
       userAgent: getUserAgent(c.req.raw.headers),
     });
@@ -206,9 +320,9 @@ referralRoutes.post("/register", async (c) => {
     return c.json({
       success: true,
       data: {
-        userId: newUser.id,
-        memberId,
-        referralCode: newReferralCode,
+        memberId: newMember.id,
+        memberIdString: memberIdString,
+        referralCode: finalReferralCode,
       },
     });
   } catch (error) {
@@ -229,35 +343,60 @@ referralRoutes.get("/my-referrals", async (c) => {
       return c.json({ error: "Wallet address required" }, 400);
     }
 
-    // Find user
+    // Find member
+    const [member] = await db
+      .select()
+      .from(members)
+      .where(eq(members.walletAddress, walletAddress.toLowerCase()))
+      .limit(1);
+
+    if (!member) {
+      return c.json({ error: "Member not found" }, 404);
+    }
+
+    // Find user for referral relationships (relationships table uses user IDs)
     const [user] = await db
       .select()
       .from(users)
       .where(eq(users.walletAddress, walletAddress.toLowerCase()))
       .limit(1);
 
-    if (!user) {
-      return c.json({ error: "User not found" }, 404);
+    // Get referral relationships if user exists
+    let referrals = [];
+    if (user) {
+      const referralData = await db
+        .select({
+          id: referralRelationships.id,
+          referredUserId: referralRelationships.referredUserId,
+          referralDate: referralRelationships.referralDate,
+          status: referralRelationships.status,
+          referredUser: users,
+        })
+        .from(referralRelationships)
+        .leftJoin(users, eq(referralRelationships.referredUserId, users.id))
+        .where(eq(referralRelationships.sponsorId, user.id));
+      
+      referrals = referralData;
     }
 
-    // Get referral relationships
-    const referrals = await db
-      .select({
-        id: referralRelationships.id,
-        referredUserId: referralRelationships.referredUserId,
-        referralDate: referralRelationships.referralDate,
-        status: referralRelationships.status,
-        referredUser: users,
-      })
-      .from(referralRelationships)
-      .leftJoin(users, eq(referralRelationships.referredUserId, users.id))
-      .where(eq(referralRelationships.sponsorId, user.id));
+    // Also get direct referrals from members table (sponsorId)
+    const directReferrals = await db
+      .select()
+      .from(members)
+      .where(eq(members.sponsorId, member.id));
 
     return c.json({
       success: true,
       data: {
-        totalReferrals: user.referralCount,
+        totalReferrals: directReferrals.length,
         referrals,
+        directReferrals: directReferrals.map(m => ({
+          id: m.id,
+          walletAddress: m.walletAddress,
+          username: m.username,
+          currentLevel: m.currentLevel,
+          joinedAt: m.joinedAt,
+        })),
       },
     });
   } catch (error) {

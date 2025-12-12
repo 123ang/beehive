@@ -324,6 +324,12 @@ memberRoutes.get("/rewards", async (c) => {
 
   const summary = await rewardService.getRewardSummary(address);
 
+  // Get member's BCC balance
+  const member = await db.query.members.findFirst({
+    where: eq(members.walletAddress, address),
+  });
+  const bccBalance = member?.bccBalance?.toString() || "0";
+
   // Calculate totals
   const totalEarned = parseFloat(summary.totalDirectSponsor) + parseFloat(summary.totalLayerPayout);
   const totalWithdrawn = parseFloat(summary.claimedUSDT || "0");
@@ -338,6 +344,7 @@ memberRoutes.get("/rewards", async (c) => {
         totalEarned: totalEarned.toString(),
         totalWithdrawn: totalWithdrawn.toString(),
         claimable: claimable.toString(),
+        bccBalance, // Add BCC balance from members table
       },
       page,
       limit,
@@ -442,6 +449,15 @@ memberRoutes.post("/register", zValidator("json", registerSchema), async (c) => 
     sponsor.id
   );
 
+  // Distribute purchase payment (Level 1: 100 to company, 30 to IT; Upgrades: 100% to company)
+  const { distributePurchasePayment } = await import("../utils/paymentDistribution");
+  await distributePurchasePayment(
+    user.walletAddress.toLowerCase(),
+    level,
+    txHash,
+    0 // previousLevel = 0 for new members
+  );
+
   // Process direct sponsor reward
   await rewardService.processDirectSponsorReward(
     referrerAddress.toLowerCase(),
@@ -456,6 +472,15 @@ memberRoutes.post("/register", zValidator("json", registerSchema), async (c) => 
       levelInfo?.priceUSDT || 0
     );
   }
+
+  // Award BCC reward for the purchased level
+  const { awardBCCReward } = await import("../utils/bccRewards");
+  await awardBCCReward(
+    user.walletAddress.toLowerCase(),
+    level,
+    undefined,
+    `BCC reward for Level ${level} membership purchase`
+  );
 
   return c.json({
     success: true,

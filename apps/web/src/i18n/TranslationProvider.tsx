@@ -6,7 +6,7 @@ import { LANGUAGES, translations, defaultLanguage, type LanguageCode } from "@/i
 interface TranslationContextValue {
   lang: LanguageCode;
   setLang: (lang: LanguageCode) => void;
-  t: (key: string) => string;
+  t: (key: string, params?: Record<string, string | number>) => string;
 }
 
 const TranslationContext = createContext<TranslationContextValue | undefined>(
@@ -20,11 +20,18 @@ export function TranslationProvider({ children }: { children: React.ReactNode })
     () => ({
       lang,
       setLang,
-      t: (key: string) => {
+      t: (key: string, params?: Record<string, string | number>) => {
         const dict = translations[lang] ?? translations[defaultLanguage];
-        const translation = dict[key] ?? translations[defaultLanguage][key];
-        // Return translation if found, otherwise return key (caller can handle fallback)
-        return translation ?? key;
+        let translation = dict[key] ?? translations[defaultLanguage][key] ?? key;
+        
+        // Replace placeholders with actual values if params are provided
+        if (params) {
+          Object.entries(params).forEach(([paramKey, paramValue]) => {
+            translation = translation.replace(new RegExp(`\\{${paramKey}\\}`, 'g'), String(paramValue));
+          });
+        }
+        
+        return translation;
       },
     }),
     [lang]

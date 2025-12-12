@@ -11,6 +11,7 @@ import { api } from "@/lib/api";
 import { formatNumber } from "@/lib/utils";
 import { useTranslation } from "@/i18n/TranslationProvider";
 import { Wallet, Gem, ShoppingCart, CheckCircle } from "lucide-react";
+import { PurchaseNFTModal } from "@/components/nft/PurchaseNFTModal";
 
 interface NFTCollection {
   id: number;
@@ -30,6 +31,8 @@ export default function NFTsPage() {
   const { t, lang } = useTranslation();
   const [collections, setCollections] = useState<NFTCollection[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedCollection, setSelectedCollection] = useState<NFTCollection | null>(null);
+  const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
 
   useEffect(() => {
     fetchCollections();
@@ -49,10 +52,9 @@ export default function NFTsPage() {
     }
   };
 
-  const handlePurchase = async (collection: NFTCollection) => {
-    // TODO: Implement NFT purchase flow
-    console.log("Purchase NFT:", collection);
-    alert(t("nft.purchaseComingSoon") || "Purchase functionality coming soon!");
+  const handlePurchase = (collection: NFTCollection) => {
+    setSelectedCollection(collection);
+    setIsPurchaseModalOpen(true);
   };
 
   // Not connected state
@@ -194,6 +196,20 @@ export default function NFTsPage() {
       </section>
 
       <Footer />
+
+      {/* Purchase Modal */}
+      {selectedCollection && (
+        <PurchaseNFTModal
+          isOpen={isPurchaseModalOpen}
+          onClose={() => {
+            setIsPurchaseModalOpen(false);
+            setSelectedCollection(null);
+          }}
+          collectionId={selectedCollection.id}
+          contractTokenId={selectedCollection.contractCollectionId}
+          collectionName={selectedCollection.name}
+        />
+      )}
     </main>
   );
 }

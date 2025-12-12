@@ -7,11 +7,16 @@ export function generateMemberId(userId: number): string {
 }
 
 /**
- * Generate a referral code from member ID
+ * Generate a random 8-character alphanumeric referral code (lowercase)
  */
-export function generateReferralCode(memberId: string): string {
-  // Format: BEEHIVE-{memberId}
-  return `BEEHIVE-${memberId}`;
+export function generateReferralCode(memberId?: string): string {
+  // Generate 8 random lowercase alphanumeric characters
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let code = '';
+  for (let i = 0; i < 8; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
 }
 
 /**
@@ -27,9 +32,9 @@ export function generateReferralCodeWithFallback(
 }
 
 /**
- * Validate referral code format
+ * Validate referral code format (8 lowercase alphanumeric characters)
  */
 export function isValidReferralCode(code: string): boolean {
-  return /^BEEHIVE-BH-\d{6}$/.test(code);
+  return /^[a-z0-9]{8}$/.test(code);
 }
 
