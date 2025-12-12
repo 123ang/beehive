@@ -575,40 +575,19 @@ memberRoutes.post("/upgrade", zValidator("json", upgradeSchema), async (c) => {
       );
     }
 
-    // Award BCC rewards for ALL levels from 1 to the new level (cumulative)
-    // Only award for levels that haven't been awarded yet
+    // Award BCC rewards for levels from previousLevel+1 to the new level
+    // Previous levels were already rewarded, so we only need to award new levels
     const { awardBCCReward } = await import("../utils/bccRewards");
     
-    // Get all existing BCC rewards for this member (query once, not in loop)
-    const existingRewards = await db
-      .select()
-      .from(rewards)
-      .where(
-        and(
-          eq(rewards.recipientWallet, normalizedWallet),
-          eq(rewards.rewardType, "bcc_token"),
-          eq(rewards.currency, "BCC")
-        )
+    // Award BCC for all new levels (from previousLevel+1 to the new level)
+    for (let l = previousLevel + 1; l <= level; l++) {
+      console.log(`Awarding BCC reward for Level ${l} to ${normalizedWallet}`);
+      await awardBCCReward(
+        normalizedWallet,
+        l,
+        undefined,
+        `BCC reward for Level ${l} membership`
       );
-
-    // Award BCC for all levels from 1 to the new level
-    for (let l = 1; l <= level; l++) {
-      // Check if this specific level was already awarded
-      const hasLevelReward = existingRewards.some(
-        (r) => r.notes && (r.notes.includes(`Level ${l} membership`) || r.notes.includes(`Level ${l}`))
-      );
-
-      if (!hasLevelReward) {
-        console.log(`Awarding BCC reward for Level ${l} to ${normalizedWallet}`);
-        await awardBCCReward(
-          normalizedWallet,
-          l,
-          undefined,
-          `BCC reward for Level ${l} membership`
-        );
-      } else {
-        console.log(`BCC reward for Level ${l} already exists for ${normalizedWallet}, skipping`);
-      }
     }
 
     return c.json({

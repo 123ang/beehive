@@ -147,7 +147,7 @@ export function MatrixViewerCytoscape({ walletAddress, onSearch }: MatrixViewerP
     }
 
     // Add empty slots (for 3x3 matrix structure)
-    const childrenByPosition = [null, null, null];
+    const childrenByPosition: (TreeNode | null)[] = [null, null, null];
     node.children?.forEach((child) => {
       if (child.position >= 1 && child.position <= 3) {
         childrenByPosition[child.position - 1] = child;

@@ -116,13 +116,8 @@ export function PurchaseModal({
   // Handle purchase error
   useEffect(() => {
     if (purchaseError && step !== "error") {
-      // Convert error to string if it's an Error object
-      const errorMessage = purchaseError instanceof Error 
-        ? purchaseError.message 
-        : typeof purchaseError === 'string' 
-        ? purchaseError 
-        : String(purchaseError);
-      setError(errorMessage);
+      // purchaseError is already a string or null from the hook
+      setError(purchaseError);
       setStep("error");
     }
   }, [purchaseError, step]);
