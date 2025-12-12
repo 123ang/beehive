@@ -535,6 +535,22 @@ memberRoutes.post("/upgrade", zValidator("json", upgradeSchema), async (c) => {
     return c.json({ success: false, error: "Invalid level" }, 400);
   }
 
+  // Check if upgrading from Level 1 to Level 2 requires 3 direct sponsors
+  if (previousLevel === 1 && level === 2) {
+    const directSponsorsResult = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(members)
+      .where(eq(members.sponsorId, existingMember.id));
+    const directSponsorsCount = directSponsorsResult[0]?.count || 0;
+
+    if (directSponsorsCount < 3) {
+      return c.json({
+        success: false,
+        error: `You need at least 3 direct sponsors to upgrade to Level 2. You currently have ${directSponsorsCount} direct sponsor(s).`,
+      }, 400);
+    }
+  }
+
   try {
     // Update member's level
     await db
