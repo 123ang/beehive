@@ -65,7 +65,18 @@ export default function ClassDetailPage() {
 
   const formatDate = (date: Date | string) => {
     const d = typeof date === "string" ? new Date(date) : date;
-    return d.toLocaleDateString(lang === "zh" ? "zh-CN" : lang === "ja" ? "ja-JP" : "en-US", {
+    // Map LanguageCode to locale string for date formatting
+    const localeMap: Record<string, string> = {
+      "en": "en-US",
+      "zh-CN": "zh-CN",
+      "zh-TW": "zh-TW",
+      "ja": "ja-JP",
+      "ko": "ko-KR",
+      "th": "th-TH",
+      "ms": "ms-MY",
+    };
+    const locale = localeMap[lang] || "en-US";
+    return d.toLocaleDateString(locale, {
       year: "numeric",
       month: "long",
       day: "numeric",

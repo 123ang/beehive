@@ -636,24 +636,45 @@ export function usePurchaseMembership() {
         try {
           const { api } = await import("@/lib/api");
           
-          // Register with backend using company transfer hash
-          console.log("Calling api.registerMember...");
-          const result = await api.registerMember(
-            purchaseState.companyHash,
-            purchaseState.level,
-            purchaseState.referrer || "0x0000000000000000000000000000000000000000"
-          );
+          // Check if member already exists
+          const dashboardData = await api.getDashboard(address);
+          const isExistingMember = dashboardData.success && dashboardData.data?.currentLevel > 0;
+          
+          if (isExistingMember) {
+            // Member exists - upgrade membership
+            console.log("Member exists, calling api.upgradeMembership...");
+            const result = await api.upgradeMembership(
+              purchaseState.companyHash,
+              purchaseState.level,
+              address
+            );
 
-          if (!result.success) {
-            throw new Error(result.error || "Registration failed");
+            if (!result.success) {
+              throw new Error(result.error || "Upgrade failed");
+            }
+
+            console.log("Upgrade successful!", result.data);
+          } else {
+            // New member - register
+            console.log("New member, calling api.registerMember...");
+            const result = await api.registerMember(
+              purchaseState.companyHash,
+              purchaseState.level,
+              purchaseState.referrer || "0x0000000000000000000000000000000000000000"
+            );
+
+            if (!result.success) {
+              throw new Error(result.error || "Registration failed");
+            }
+
+            console.log("Registration successful!");
           }
-
-          console.log("Registration successful!");
-          // Refetch balance after successful registration
+          
+          // Refetch balance after successful registration/upgrade
           refetchBalance();
         } catch (err: any) {
-          console.error("Failed to register after purchase:", err);
-          setRegistrationError(err.message || "Registration failed");
+          console.error("Failed to register/upgrade after purchase:", err);
+          setRegistrationError(err.message || "Registration/upgrade failed");
         } finally {
           setIsRegistering(false);
         }

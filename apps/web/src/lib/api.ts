@@ -170,6 +170,13 @@ class ApiClient {
     });
   }
 
+  async upgradeMembership(txHash: string, level: number, walletAddress: string) {
+    return this.request<any>("/api/members/upgrade", {
+      method: "POST",
+      body: JSON.stringify({ txHash, level, walletAddress }),
+    });
+  }
+
   // Newsletter endpoints
   async subscribeNewsletter(email: string) {
     return this.request<{ message: string }>("/api/newsletter/subscribe", {

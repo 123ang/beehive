@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useAccount, useChainId, useSwitchChain } from "wagmi";
 import { bsc, bscTestnet } from "wagmi/chains";
@@ -42,6 +43,7 @@ export function PurchaseModal({
   referrer,
   onSuccess,
 }: PurchaseModalProps) {
+  const router = useRouter();
   const { address } = useAccount();
   const chainId = useChainId();
   const { switchChain, isPending: isSwitchingChain } = useSwitchChain();
@@ -101,8 +103,15 @@ export function PurchaseModal({
     if (isPurchaseSuccess && step === "purchasing") {
       setStep("success");
       onSuccess?.();
+      
+      // Redirect to dashboard after 2 seconds
+      const redirectTimer = setTimeout(() => {
+        router.push("/user/dashboard");
+      }, 2000);
+      
+      return () => clearTimeout(redirectTimer);
     }
-  }, [isPurchaseSuccess, step, onSuccess]);
+  }, [isPurchaseSuccess, step, onSuccess, router]);
 
   // Handle purchase error
   useEffect(() => {

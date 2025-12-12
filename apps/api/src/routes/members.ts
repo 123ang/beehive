@@ -5,8 +5,8 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { db, members, rewards, placements } from "../db";
-import { eq, desc, sql, asc } from "drizzle-orm";
+import { db, members, rewards, placements, transactions } from "../db";
+import { eq, desc, sql, asc, and } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
 import { matrixService } from "../services/MatrixService";
 import { rewardService } from "../services/RewardService";
@@ -473,14 +473,17 @@ memberRoutes.post("/register", zValidator("json", registerSchema), async (c) => 
     );
   }
 
-  // Award BCC reward for the purchased level
+  // Award BCC rewards for ALL levels from 1 to the purchased level (cumulative)
+  // This ensures Level 3 members get 500 (Level 1) + 100 (Level 2) + 200 (Level 3) = 800 BCC total
   const { awardBCCReward } = await import("../utils/bccRewards");
-  await awardBCCReward(
-    user.walletAddress.toLowerCase(),
-    level,
-    undefined,
-    `BCC reward for Level ${level} membership purchase`
-  );
+  for (let l = 1; l <= level; l++) {
+    await awardBCCReward(
+      user.walletAddress.toLowerCase(),
+      l,
+      undefined,
+      `BCC reward for Level ${l} membership`
+    );
+  }
 
   return c.json({
     success: true,
@@ -493,5 +496,136 @@ memberRoutes.post("/register", zValidator("json", registerSchema), async (c) => 
       },
     },
   });
+});
+
+/**
+ * Upgrade membership level (for existing members)
+ * No authentication required - uses walletAddress from request
+ */
+const upgradeSchema = z.object({
+  txHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
+  level: z.number().int().min(1).max(19),
+  walletAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+});
+
+memberRoutes.post("/upgrade", zValidator("json", upgradeSchema), async (c) => {
+  const { txHash, level, walletAddress } = c.req.valid("json");
+  const normalizedWallet = walletAddress.toLowerCase();
+
+  // Check if member exists
+  const existingMember = await db.query.members.findFirst({
+    where: eq(members.walletAddress, normalizedWallet),
+  });
+
+  if (!existingMember) {
+    return c.json({ success: false, error: "Member not found. Please register first." }, 404);
+  }
+
+  // Check if level is valid upgrade
+  const previousLevel = existingMember.currentLevel || 0;
+  if (level <= previousLevel) {
+    return c.json({ 
+      success: false, 
+      error: `Cannot downgrade. Current level: ${previousLevel}, Requested: ${level}` 
+    }, 400);
+  }
+
+  const levelInfo = MEMBERSHIP_LEVELS.find((l) => l.level === level);
+  if (!levelInfo) {
+    return c.json({ success: false, error: "Invalid level" }, 400);
+  }
+
+  try {
+    // Update member's level
+    await db
+      .update(members)
+      .set({
+        currentLevel: level,
+        totalInflow: (parseFloat(existingMember.totalInflow?.toString() || "0") + levelInfo.priceUSDT).toString(),
+      })
+      .where(eq(members.id, existingMember.id));
+
+    // Insert transaction record for the purchase
+    await db.insert(transactions).values({
+      walletAddress: normalizedWallet,
+      txHash: txHash,
+      transactionType: "purchase",
+      currency: "USDT",
+      amount: levelInfo.priceUSDT.toString(),
+      status: "confirmed",
+      level: level,
+      notes: `Upgrade from Level ${previousLevel} to Level ${level}`,
+    });
+
+    // Distribute purchase payment (Level 1: 100 to company, 30 to IT; Upgrades: 100% to company)
+    const { distributePurchasePayment } = await import("../utils/paymentDistribution");
+    await distributePurchasePayment(
+      normalizedWallet,
+      level,
+      txHash,
+      previousLevel // Pass previous level for proper distribution
+    );
+
+    // Process layer reward if level >= 2
+    if (level >= 2) {
+      await rewardService.processLayerReward(
+        normalizedWallet,
+        level,
+        levelInfo.priceUSDT
+      );
+    }
+
+    // Award BCC rewards for ALL levels from 1 to the new level (cumulative)
+    // Only award for levels that haven't been awarded yet
+    const { awardBCCReward } = await import("../utils/bccRewards");
+    
+    // Get all existing BCC rewards for this member (query once, not in loop)
+    const existingRewards = await db
+      .select()
+      .from(rewards)
+      .where(
+        and(
+          eq(rewards.recipientWallet, normalizedWallet),
+          eq(rewards.rewardType, "bcc_token"),
+          eq(rewards.currency, "BCC")
+        )
+      );
+
+    // Award BCC for all levels from 1 to the new level
+    for (let l = 1; l <= level; l++) {
+      // Check if this specific level was already awarded
+      const hasLevelReward = existingRewards.some(
+        (r) => r.notes && (r.notes.includes(`Level ${l} membership`) || r.notes.includes(`Level ${l}`))
+      );
+
+      if (!hasLevelReward) {
+        console.log(`Awarding BCC reward for Level ${l} to ${normalizedWallet}`);
+        await awardBCCReward(
+          normalizedWallet,
+          l,
+          undefined,
+          `BCC reward for Level ${l} membership`
+        );
+      } else {
+        console.log(`BCC reward for Level ${l} already exists for ${normalizedWallet}, skipping`);
+      }
+    }
+
+    return c.json({
+      success: true,
+      data: {
+        memberId: existingMember.id,
+        previousLevel,
+        newLevel: level,
+        message: `Successfully upgraded from Level ${previousLevel} to Level ${level}`,
+      },
+    });
+  } catch (error: any) {
+    console.error("Upgrade error:", error);
+    return c.json({ 
+      success: false, 
+      error: error.message || "Failed to upgrade membership" 
+    }, 500);
+  }
 });
 
