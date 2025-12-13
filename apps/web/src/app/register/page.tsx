@@ -10,6 +10,7 @@ import { useTranslation } from "@/i18n/TranslationProvider";
 import { ArrowLeft, User, Mail, CheckCircle, AlertCircle, Users } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { api } from "@/lib/api";
 
 export default function RegisterPage() {
   const { isConnected, address } = useAccount();
@@ -18,7 +19,8 @@ export default function RegisterPage() {
   const searchParams = useSearchParams();
   
   // Get referral code from URL parameter
-  const urlReferralCode = searchParams.get("ref") || "";
+  const urlReferralCode = searchParams.get("referral_code") || "";
+  const hasReferralCodeFromUrl = !!urlReferralCode;
   
   const [formData, setFormData] = useState({
     username: "",
@@ -32,6 +34,31 @@ export default function RegisterPage() {
     message: string;
     referrerInfo?: string;
   } | null>(null);
+  const [isCheckingMember, setIsCheckingMember] = useState(false);
+
+  // Check if user is already a member and redirect to dashboard
+  useEffect(() => {
+    const checkIfMember = async () => {
+      if (!isConnected || !address) return;
+      
+      setIsCheckingMember(true);
+      try {
+        const dashboardData = await api.getDashboard(address);
+        if (dashboardData.success && dashboardData.data?.isMember) {
+          // User is already a member, redirect to dashboard
+          router.push("/user/dashboard");
+          return;
+        }
+      } catch (error) {
+        console.error("Failed to check member status:", error);
+        // Continue with registration if check fails
+      } finally {
+        setIsCheckingMember(false);
+      }
+    };
+
+    checkIfMember();
+  }, [isConnected, address, router]);
 
   // Validate referral code when it changes
   useEffect(() => {
@@ -44,19 +71,21 @@ export default function RegisterPage() {
 
   // Update referral code when URL param changes
   useEffect(() => {
-    if (urlReferralCode && !formData.referralCode) {
+    if (urlReferralCode) {
       setFormData((prev) => ({ ...prev, referralCode: urlReferralCode }));
     }
   }, [urlReferralCode]);
 
   const validateReferralCode = async (code: string) => {
-    // TODO: Call API to validate referral code
+    // TODO: Call API to validate referral code and get referrer level
     // For now, simulate validation
     if (code.length > 0) {
+      // Remove "user_" prefix if present, just show wallet address
+      const walletAddress = code.startsWith("user_") ? code.replace("user_", "") : code;
       setReferralStatus({
         valid: true,
         message: t("register.referralStatus.valid"),
-        referrerInfo: `user_${code} (${t("register.referralStatus.level2")})`,
+        referrerInfo: `${walletAddress} (${t("register.referralStatus.level2")})`,
       });
     } else {
       setReferralStatus(null);
@@ -65,6 +94,10 @@ export default function RegisterPage() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
+    // Prevent editing referral code if it came from URL
+    if (name === "referralCode" && hasReferralCodeFromUrl) {
+      return;
+    }
     setFormData((prev) => ({ ...prev, [name]: value }));
     // Clear error when user starts typing
     if (errors[name]) {
@@ -128,6 +161,22 @@ export default function RegisterPage() {
     if (!addr) return "";
     return `${addr.slice(0, 6)}...${addr.slice(-6)}`;
   };
+
+  // Show loading state while checking if user is a member
+  if (isCheckingMember) {
+    return (
+      <main className="min-h-screen">
+        <Header />
+        <section className="pt-28 pb-16">
+          <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-honey-500 mx-auto"></div>
+            <p className="text-white mt-4">Checking membership status...</p>
+          </div>
+        </section>
+        <Footer />
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen">
@@ -285,9 +334,18 @@ export default function RegisterPage() {
                     name="referralCode"
                     value={formData.referralCode}
                     onChange={handleChange}
-                    className="w-full pl-10 pr-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-honey-500/50 focus:ring-1 focus:ring-honey-500/50 transition-all"
+                    readOnly={hasReferralCodeFromUrl}
+                    className={`w-full pl-10 pr-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-honey-500/50 focus:ring-1 focus:ring-honey-500/50 transition-all ${
+                      hasReferralCodeFromUrl ? "cursor-not-allowed opacity-75" : ""
+                    }`}
                     placeholder={t("register.referralCodePlaceholder")}
                   />
+                  {hasReferralCodeFromUrl && (
+                    <div className="mt-2 text-xs text-honey-400 flex items-center gap-1">
+                      <CheckCircle className="w-4 h-4" />
+                      <span>Referral code from link (cannot be changed)</span>
+                    </div>
+                  )}
                 </div>
                 {errors.referralCode && (
                   <p className="text-red-400 text-sm mt-2">{errors.referralCode}</p>

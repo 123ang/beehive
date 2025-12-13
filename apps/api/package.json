@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "cross-env NODE_OPTIONS=--no-deprecation tsx watch src/index.ts",
     "build": "tsup src/index.ts --format esm --dts",
-    "start": "node dist/index.js",
+    "start": "cross-env NODE_OPTIONS=--no-deprecation node dist/index.js",
     "db:generate": "drizzle-kit generate:mysql",
     "db:migrate": "drizzle-kit up:mysql",
     "db:push": "drizzle-kit push:mysql",
@@ -44,6 +44,7 @@
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",
     "@types/node": "^20.11.0",
+    "cross-env": "^7.0.3",
     "dotenv": "^16.3.1",
     "drizzle-kit": "^0.20.13",
     "rimraf": "^5.0.5",

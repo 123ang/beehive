@@ -177,6 +177,13 @@ class ApiClient {
     });
   }
 
+  async withdraw(walletAddress: string, currency: "USDT" | "BCC", amount: number) {
+    return this.request<any>("/api/members/withdraw", {
+      method: "POST",
+      body: JSON.stringify({ walletAddress, currency, amount }),
+    });
+  }
+
   // Newsletter endpoints
   async subscribeNewsletter(email: string) {
     return this.request<{ message: string }>("/api/newsletter/subscribe", {

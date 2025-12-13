@@ -592,3 +592,25 @@ export type NftCollection = typeof nftCollections.$inferSelect;
 export type NewNftCollection = typeof nftCollections.$inferInsert;
 export type NewsletterSubscription = typeof newsletterSubscriptions.$inferSelect;
 export type NewNewsletterSubscription = typeof newsletterSubscriptions.$inferInsert;
+
+// ============================================
+// MEMBER ACTIVITY LOGS TABLE
+// ============================================
+
+// Member Activity Logs Table - Tracks member activities
+export const memberActivityLogs = mysqlTable("member_activity_logs", {
+  id: int("id").primaryKey().autoincrement(),
+  walletAddress: varchar("wallet_address", { length: 42 }).notNull(),
+  memberId: int("member_id"), // Foreign key to members table
+  activityType: varchar("activity_type", { length: 50 }).notNull(), // purchase_membership, register, withdrawal, enroll_class, purchase_nft
+  metadata: text("metadata"), // JSON string for additional context (txHash, level, amount, etc.)
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  walletIdx: index("member_activity_logs_wallet_idx").on(table.walletAddress),
+  memberIdx: index("member_activity_logs_member_idx").on(table.memberId),
+  activityTypeIdx: index("member_activity_logs_activity_type_idx").on(table.activityType),
+  createdAtIdx: index("member_activity_logs_created_at_idx").on(table.createdAt),
+}));
+
+export type MemberActivityLog = typeof memberActivityLogs.$inferSelect;
+export type NewMemberActivityLog = typeof memberActivityLogs.$inferInsert;

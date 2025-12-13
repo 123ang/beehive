@@ -54,6 +54,7 @@ export const db = drizzle(pool, { schema, mode: "default" });
 
 // Export schema for convenience
 export * from "./schema";
+export { memberActivityLogs } from "./schema";
 
 // Health check function
 export async function checkDatabaseConnection(): Promise<boolean> {

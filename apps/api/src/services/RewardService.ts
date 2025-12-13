@@ -291,60 +291,76 @@ export class RewardService {
    * Get reward summary for a member
    */
   async getRewardSummary(wallet: string) {
-    const allRewards = await db
-      .select()
-      .from(rewards)
-      .where(eq(rewards.recipientWallet, wallet));
+    try {
+      const allRewards = await db
+        .select()
+        .from(rewards)
+        .where(eq(rewards.recipientWallet, wallet));
 
-    const summary = {
-      totalDirectSponsor: "0",
-      totalLayerPayout: "0",
-      totalBCC: "0",
-      pendingUSDT: "0",
-      pendingBCC: "0",
-      claimedUSDT: "0",
-      claimedBCC: "0",
-    };
+      const summary = {
+        totalDirectSponsor: "0",
+        totalLayerPayout: "0",
+        totalBCC: "0",
+        pendingUSDT: "0",
+        pendingBCC: "0",
+        claimedUSDT: "0",
+        claimedBCC: "0",
+      };
 
-    for (const reward of allRewards) {
-      const amount = parseFloat(reward.amount);
+      for (const reward of allRewards) {
+        const amount = parseFloat(reward.amount || "0");
+        if (isNaN(amount)) continue;
 
-      if (reward.rewardType === "direct_sponsor") {
-        summary.totalDirectSponsor = (
-          parseFloat(summary.totalDirectSponsor) + amount
-        ).toString();
-      } else if (reward.rewardType === "layer_payout") {
-        summary.totalLayerPayout = (
-          parseFloat(summary.totalLayerPayout) + amount
-        ).toString();
-      } else if (reward.rewardType === "bcc_token") {
-        summary.totalBCC = (parseFloat(summary.totalBCC) + amount).toString();
+        if (reward.rewardType === "direct_sponsor") {
+          summary.totalDirectSponsor = (
+            parseFloat(summary.totalDirectSponsor) + amount
+          ).toString();
+        } else if (reward.rewardType === "layer_payout") {
+          summary.totalLayerPayout = (
+            parseFloat(summary.totalLayerPayout) + amount
+          ).toString();
+        } else if (reward.rewardType === "bcc_token") {
+          summary.totalBCC = (parseFloat(summary.totalBCC) + amount).toString();
+        }
+
+        if (reward.status === "pending") {
+          if (reward.currency === "USDT") {
+            summary.pendingUSDT = (
+              parseFloat(summary.pendingUSDT) + amount
+            ).toString();
+          } else {
+            summary.pendingBCC = (
+              parseFloat(summary.pendingBCC) + amount
+            ).toString();
+          }
+        } else if (reward.status === "claimed" || reward.status === "instant") {
+          // "instant" status means withdrawn/claimed
+          if (reward.currency === "USDT") {
+            summary.claimedUSDT = (
+              parseFloat(summary.claimedUSDT) + amount
+            ).toString();
+          } else {
+            summary.claimedBCC = (
+              parseFloat(summary.claimedBCC) + amount
+            ).toString();
+          }
+        }
       }
 
-      if (reward.status === "pending") {
-        if (reward.currency === "USDT") {
-          summary.pendingUSDT = (
-            parseFloat(summary.pendingUSDT) + amount
-          ).toString();
-        } else {
-          summary.pendingBCC = (
-            parseFloat(summary.pendingBCC) + amount
-          ).toString();
-        }
-      } else if (reward.status === "claimed") {
-        if (reward.currency === "USDT") {
-          summary.claimedUSDT = (
-            parseFloat(summary.claimedUSDT) + amount
-          ).toString();
-        } else {
-          summary.claimedBCC = (
-            parseFloat(summary.claimedBCC) + amount
-          ).toString();
-        }
-      }
+      return summary;
+    } catch (error: any) {
+      console.error("Error in getRewardSummary:", error);
+      // Return default summary on error
+      return {
+        totalDirectSponsor: "0",
+        totalLayerPayout: "0",
+        totalBCC: "0",
+        pendingUSDT: "0",
+        pendingBCC: "0",
+        claimedUSDT: "0",
+        claimedBCC: "0",
+      };
     }
-
-    return summary;
   }
 
   /**

@@ -289,67 +289,85 @@ memberRoutes.get("/layers", async (c) => {
  * Get reward history and overview (no auth required - accepts wallet address)
  */
 memberRoutes.get("/rewards", async (c) => {
-  const walletAddress = c.req.query("address");
-  const authHeader = c.req.header("Authorization");
-  const page = parseInt(c.req.query("page") || "1");
-  const limit = parseInt(c.req.query("limit") || "20");
-  const offset = (page - 1) * limit;
-  
-  let address: string | undefined;
-  
-  if (walletAddress) {
-    // Public access via query parameter
-    address = walletAddress.toLowerCase();
-  } else if (authHeader?.startsWith("Bearer ")) {
-    // Authenticated access via JWT token
-    const token = authHeader.substring(7);
-    const { verifyToken } = await import("../lib/jwt");
-    const payload = await verifyToken(token);
-    if (payload) {
-      address = payload.walletAddress;
+  try {
+    const walletAddress = c.req.query("address");
+    const authHeader = c.req.header("Authorization");
+    const page = parseInt(c.req.query("page") || "1");
+    const limit = parseInt(c.req.query("limit") || "20");
+    const offset = (page - 1) * limit;
+    
+    let address: string | undefined;
+    
+    if (walletAddress) {
+      // Public access via query parameter
+      address = walletAddress.toLowerCase();
+    } else if (authHeader?.startsWith("Bearer ")) {
+      // Authenticated access via JWT token
+      const token = authHeader.substring(7);
+      const { verifyToken } = await import("../lib/jwt");
+      const payload = await verifyToken(token);
+      if (payload) {
+        address = payload.walletAddress;
+      }
     }
-  }
-  
-  if (!address) {
-    return c.json({ success: false, error: "Wallet address required" }, 400);
-  }
+    
+    if (!address) {
+      return c.json({ success: false, error: "Wallet address required" }, 400);
+    }
 
-  const allRewards = await db
-    .select()
-    .from(rewards)
-    .where(eq(rewards.recipientWallet, address))
-    .orderBy(desc(rewards.createdAt))
-    .limit(limit)
-    .offset(offset);
+    const allRewards = await db
+      .select()
+      .from(rewards)
+      .where(eq(rewards.recipientWallet, address))
+      .orderBy(desc(rewards.createdAt))
+      .limit(limit)
+      .offset(offset);
 
-  const summary = await rewardService.getRewardSummary(address);
+    // Get transactions (withdrawals, deposits, etc.)
+    const allTransactions = await db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.walletAddress, address))
+      .orderBy(desc(transactions.createdAt))
+      .limit(limit)
+      .offset(offset);
 
-  // Get member's BCC balance
-  const member = await db.query.members.findFirst({
-    where: eq(members.walletAddress, address),
-  });
-  const bccBalance = member?.bccBalance?.toString() || "0";
+    const summary = await rewardService.getRewardSummary(address);
 
-  // Calculate totals
-  const totalEarned = parseFloat(summary.totalDirectSponsor) + parseFloat(summary.totalLayerPayout);
-  const totalWithdrawn = parseFloat(summary.claimedUSDT || "0");
-  const claimable = parseFloat(summary.pendingUSDT || "0");
+    // Get member's BCC balance
+    const member = await db.query.members.findFirst({
+      where: eq(members.walletAddress, address),
+    });
+    const bccBalance = member?.bccBalance?.toString() || "0";
 
-  return c.json({
-    success: true,
-    data: {
-      rewards: allRewards,
-      summary: {
-        ...summary,
-        totalEarned: totalEarned.toString(),
-        totalWithdrawn: totalWithdrawn.toString(),
-        claimable: claimable.toString(),
-        bccBalance, // Add BCC balance from members table
+    // Calculate totals
+    const totalEarned = parseFloat(summary.totalDirectSponsor || "0") + parseFloat(summary.totalLayerPayout || "0");
+    const totalWithdrawn = parseFloat(summary.claimedUSDT || "0");
+    const claimable = parseFloat(summary.pendingUSDT || "0");
+
+    return c.json({
+      success: true,
+      data: {
+        rewards: allRewards,
+        transactions: allTransactions, // Include transactions
+        summary: {
+          ...summary,
+          totalEarned: totalEarned.toString(),
+          totalWithdrawn: totalWithdrawn.toString(),
+          claimable: claimable.toString(),
+          bccBalance, // Add BCC balance from members table
+        },
+        page,
+        limit,
       },
-      page,
-      limit,
-    },
-  });
+    });
+  } catch (error: any) {
+    console.error("Error in /rewards endpoint:", error);
+    return c.json({ 
+      success: false, 
+      error: error.message || "Failed to fetch rewards" 
+    }, 500);
+  }
 });
 
 /**
@@ -430,7 +448,7 @@ memberRoutes.post("/register", zValidator("json", registerSchema), async (c) => 
 
   // Create member
   const levelInfo = MEMBERSHIP_LEVELS.find((l) => l.level === level);
-  const [newMember] = await db
+  await db
     .insert(members)
     .values({
       walletAddress: user.walletAddress.toLowerCase(),
@@ -438,8 +456,18 @@ memberRoutes.post("/register", zValidator("json", registerSchema), async (c) => 
       currentLevel: level,
       totalInflow: levelInfo?.priceUSDT.toString() || "0",
       sponsorId: sponsor.id,
-    })
-    .returning();
+    });
+
+  // Get the inserted member (MySQL doesn't support .returning())
+  const [newMember] = await db
+    .select()
+    .from(members)
+    .where(eq(members.walletAddress, user.walletAddress.toLowerCase()))
+    .limit(1);
+
+  if (!newMember) {
+    throw new Error("Failed to create member");
+  }
 
   // Place in matrix tree
   await matrixService.placeMember(
@@ -484,6 +512,19 @@ memberRoutes.post("/register", zValidator("json", registerSchema), async (c) => 
       `BCC reward for Level ${l} membership`
     );
   }
+
+  // Log member activity
+  const { logMemberActivity } = await import("../utils/memberActivityLogger");
+  await logMemberActivity({
+    walletAddress: user.walletAddress.toLowerCase(),
+    activityType: "register",
+    metadata: {
+      level,
+      txHash,
+      referrerAddress: referrerAddress.toLowerCase(),
+      priceUSDT: levelInfo?.priceUSDT || 0,
+    },
+  });
 
   return c.json({
     success: true,
@@ -565,7 +606,7 @@ memberRoutes.post("/upgrade", zValidator("json", upgradeSchema), async (c) => {
     await db.insert(transactions).values({
       walletAddress: normalizedWallet,
       txHash: txHash,
-      transactionType: "purchase",
+      transactionType: "purchase_membership",
       currency: "USDT",
       amount: levelInfo.priceUSDT.toString(),
       status: "confirmed",
@@ -606,6 +647,19 @@ memberRoutes.post("/upgrade", zValidator("json", upgradeSchema), async (c) => {
       );
     }
 
+    // Log member activity
+    const { logMemberActivity } = await import("../utils/memberActivityLogger");
+    await logMemberActivity({
+      walletAddress: normalizedWallet,
+      activityType: "purchase_membership",
+      metadata: {
+        previousLevel,
+        newLevel: level,
+        txHash,
+        priceUSDT: levelInfo.priceUSDT,
+      },
+    });
+
     return c.json({
       success: true,
       data: {
@@ -620,6 +674,69 @@ memberRoutes.post("/upgrade", zValidator("json", upgradeSchema), async (c) => {
     return c.json({ 
       success: false, 
       error: error.message || "Failed to upgrade membership" 
+    }, 500);
+  }
+});
+
+/**
+ * Withdraw rewards (USDT or BCC)
+ * Transfers tokens from company account to member address
+ */
+const withdrawSchema = z.object({
+  walletAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+  currency: z.enum(["USDT", "BCC"]),
+  amount: z.number().positive(),
+});
+
+memberRoutes.post("/withdraw", zValidator("json", withdrawSchema), async (c) => {
+  try {
+    const body = await c.req.json();
+    console.log("Withdrawal request body:", { 
+      walletAddress: body.walletAddress, 
+      currency: body.currency, 
+      amount: body.amount,
+      walletAddressLength: body.walletAddress?.length,
+      walletAddressStartsWith0x: body.walletAddress?.startsWith("0x")
+    });
+    
+    const { walletAddress, currency, amount } = c.req.valid("json");
+    const normalizedWallet = walletAddress.toLowerCase();
+
+    const { processWithdrawal } = await import("../utils/withdrawals");
+    
+    const result = await processWithdrawal({
+      walletAddress: normalizedWallet,
+      currency,
+      amount,
+      notes: `Withdrawal of ${amount} ${currency} to ${normalizedWallet}`,
+    });
+
+    if (!result.success) {
+      console.error("Withdrawal failed:", result.error);
+      return c.json({ success: false, error: result.error }, 400);
+    }
+
+    return c.json({
+      success: true,
+      data: {
+        transactionId: result.transactionId,
+        txHash: result.txHash,
+        message: `Successfully withdrew ${amount} ${currency}`,
+      },
+    });
+  } catch (error: any) {
+    console.error("Withdrawal endpoint error:", error);
+    // Check if it's a validation error
+    if (error.issues) {
+      console.error("Validation errors:", error.issues);
+      return c.json({ 
+        success: false, 
+        error: `Validation failed: ${error.issues.map((i: any) => `${i.path.join(".")} - ${i.message}`).join(", ")}` 
+      }, 400);
+    }
+    return c.json({ 
+      success: false, 
+      error: error.message || "Failed to process withdrawal" 
     }, 500);
   }
 });

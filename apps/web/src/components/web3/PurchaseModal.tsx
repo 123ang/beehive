@@ -70,8 +70,8 @@ export function PurchaseModal({
     ? parseFloat(balance) >= levelInfo.priceUSDT
     : false;
   
-  // Check if user has enough BNB for gas (minimum 0.001 BNB recommended)
-  const hasEnoughBNB = parseFloat(bnbBalance) >= 0.001;
+  // Check if user has enough BNB for gas (minimum 0.0001 BNB recommended)
+  const hasEnoughBNB = parseFloat(bnbBalance) >= 0.0001;
 
   // Track if transaction was submitted but stuck
   const [transactionTimeout, setTransactionTimeout] = useState(false);
@@ -277,7 +277,7 @@ export function PurchaseModal({
                   </p>
                   <p className="text-yellow-400 text-xs mt-2">
                     ⚠️ This is why MetaMask's "Review" button may be disabled.
-                    Please add at least 0.001 BNB to your wallet.
+                    Please add at least 0.0001 BNB to your wallet.
                   </p>
                 </>
               ) : (

@@ -33,6 +33,20 @@ export default function MembershipPage() {
   const [selectedLevel, setSelectedLevel] = useState<number | null>(null);
   const [currentUserLevel, setCurrentUserLevel] = useState<number>(0);
   const [isLoadingLevel, setIsLoadingLevel] = useState(false);
+  
+  // Get referrer from URL parameter
+  const [referrerAddress, setReferrerAddress] = useState<string | null>(null);
+  
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      // Check both 'ref' (legacy) and 'referral_code' (new) for backward compatibility
+      const ref = urlParams.get("referral_code") || urlParams.get("ref");
+      if (ref) {
+        setReferrerAddress(ref);
+      }
+    }
+  }, []);
 
   // Fetch user's current level when wallet is connected
   useEffect(() => {
@@ -62,27 +76,33 @@ export default function MembershipPage() {
   const handlePurchase = async (level: number) => {
     if (!isConnected || !address) return;
     
-    // For Level 1, need a referrer - get from dashboard or use a default
+    // For Level 1, need a referrer - get from URL, dashboard, or show error
     // For upgrades, use existing sponsor
     let referrer = address; // Default fallback
     
     try {
       const dashboard = await api.getDashboard(address);
       if (dashboard.success && dashboard.data?.sponsor?.walletAddress) {
+        // Existing member - use their sponsor
         referrer = dashboard.data.sponsor.walletAddress;
       } else if (level === 1) {
-        // For Level 1, we need a referrer - show error or get from URL
-        const urlParams = new URLSearchParams(window.location.search);
-        const refCode = urlParams.get("ref");
-        if (refCode) {
-          // Validate referral code and get sponsor address
-          // For now, we'll require referrer to be passed
-          alert("Please provide a referrer address for Level 1 purchase");
+        // New member - need referrer from URL or show error
+        if (referrerAddress) {
+          referrer = referrerAddress;
+        } else {
+          alert("Please provide a referrer address. Add ?ref=0x... to the URL or visit the membership page with a referral link.");
           return;
         }
       }
     } catch (error) {
       console.error("Failed to get referrer:", error);
+      // If error and Level 1, still check URL
+      if (level === 1 && referrerAddress) {
+        referrer = referrerAddress;
+      } else if (level === 1) {
+        alert("Please provide a referrer address. Add ?ref=0x... to the URL or visit the membership page with a referral link.");
+        return;
+      }
     }
     
     setSelectedLevel(level);
@@ -288,7 +308,7 @@ export default function MembershipPage() {
           isOpen={!!selectedLevel}
           onClose={() => setSelectedLevel(null)}
           level={selectedLevel}
-          referrer={address} // TODO: Get actual referrer from dashboard or URL
+          referrer={referrerAddress || address}
           onSuccess={handlePurchaseSuccess}
         />
       )}

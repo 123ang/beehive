@@ -2,13 +2,10 @@ import { defineConfig } from "drizzle-kit";
 import { config } from "dotenv";
 import { resolve } from "path";
 
-// Load .env file from apps/api directory (current working directory when running from apps/api)
-config({ path: resolve(process.cwd(), ".env") });
-
-// Also try loading from root .env if api/.env doesn't have DATABASE_URL
-if (!process.env.DATABASE_URL) {
-  config({ path: resolve(process.cwd(), "../../.env") });
-}
+// Load .env file from project root only
+// Root .env is at: beehive/.env (two levels up from apps/api/)
+const rootEnvPath = resolve(process.cwd(), "../../.env");
+config({ path: rootEnvPath });
 
 const connectionString = process.env.DATABASE_URL || "mysql://root:@localhost:3306/beehive";
 

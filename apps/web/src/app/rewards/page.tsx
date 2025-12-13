@@ -45,6 +45,17 @@ interface Reward {
   expiresAt?: string;
 }
 
+interface Transaction {
+  id: number;
+  transactionType: string;
+  amount: string;
+  currency: string;
+  status: string;
+  txHash?: string | null;
+  notes?: string | null;
+  createdAt: string;
+}
+
 interface RewardSummary {
   totalEarned: string;
   pending: string;
@@ -64,6 +75,7 @@ export default function RewardsPage() {
   const searchParams = useSearchParams();
   const { t } = useTranslation();
   const [rewards, setRewards] = useState<Reward[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [summary, setSummary] = useState<RewardSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<string>("pending");
@@ -93,6 +105,7 @@ export default function RewardsPage() {
       const result = await api.getRewards(walletAddress);
     if (result.success && result.data) {
       setRewards(result.data.rewards || []);
+      setTransactions(result.data.transactions || []);
       setSummary(result.data.summary || null);
         // Set available balance from claimable amount (USDT)
         if (result.data.summary?.claimable) {
@@ -517,7 +530,7 @@ export default function RewardsPage() {
                               className="w-full bg-gray-900/50 border border-gray-700/30 rounded-lg px-4 py-3 text-white appearance-none focus:outline-none focus:border-yellow-500/50"
                               disabled
                             >
-                              <option value="bsc">BSC (Binance Smart Chain) - 3 USDT fee</option>
+                              <option value="bsc">BSC (Binance Smart Chain)</option>
                             </select>
                             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
                           </div>
@@ -554,7 +567,13 @@ export default function RewardsPage() {
                         {/* Withdrawal Amount */}
                         <div>
                           <label className="block text-gray-400 text-sm mb-2">
-                            {t("rewards.withdraw.amount") || `Withdrawal Amount (${selectedCurrency})`}
+                            {(() => {
+                              const baseText = t("rewards.withdraw.amount") || "Withdrawal Amount";
+                              // Replace currency in translation or append if not found
+                              return baseText.includes("(USDT)") || baseText.includes("(BCC)")
+                                ? baseText.replace(/\(USDT\)|\(BCC\)/g, `(${selectedCurrency})`)
+                                : `${baseText} (${selectedCurrency})`;
+                            })()}
                           </label>
                           <input
                             type="number"
@@ -567,12 +586,38 @@ export default function RewardsPage() {
 
                         {/* Withdraw Button */}
                         <Button
-                          onClick={() => {
-                            // TODO: Implement withdrawal
-                            console.log("Withdraw", withdrawAmount, selectedChain);
+                          onClick={async () => {
+                            if (!address || !withdrawAmount) return;
+                            
+                            // Validate address format
+                            if (!address.startsWith("0x") || address.length !== 42) {
+                              alert(`Invalid wallet address format. Expected format: 0x followed by 40 hex characters. Got: ${address}`);
+                              console.error("Invalid address format:", address, "Length:", address.length);
+                              return;
+                            }
+                            
+                            const amount = parseFloat(withdrawAmount);
+                            if (amount <= 0) return;
+                            
+                            console.log("Withdrawing:", { address, currency: selectedCurrency, amount });
+                            
+                            try {
+                              const result = await api.withdraw(address, selectedCurrency, amount);
+                              if (result.success) {
+                                alert(`Withdrawal successful! Transaction: ${result.data.txHash}\nView on BSCScan: https://bscscan.com/tx/${result.data.txHash}`);
+                                // Refresh data
+                                await fetchRewards();
+                                setWithdrawAmount("");
+                              } else {
+                                alert(`Withdrawal failed: ${result.error}`);
+                              }
+                            } catch (error: any) {
+                              console.error("Withdrawal error:", error);
+                              alert(`Withdrawal failed: ${error.message || "Unknown error"}`);
+                            }
                           }}
                           className="w-full bg-yellow-600 hover:bg-yellow-700 text-white"
-                          disabled={!withdrawAmount || parseFloat(withdrawAmount) <= 0}
+                          disabled={!withdrawAmount || parseFloat(withdrawAmount) <= 0 || !address}
                         >
                           {t("rewards.withdraw.button", { chain: "BSC" }) || `Withdraw ${selectedCurrency} to BSC`}
                           <ArrowRight className="w-4 h-4 ml-2" />
@@ -587,55 +632,91 @@ export default function RewardsPage() {
                         </div>
                       </div>
                     )}
-                    {activeTab === "history" && (
-                      <div className="space-y-3">
-                        {rewards.filter((r) => r.status !== "pending").length === 0 ? (
-                          <div className="bg-gray-900/50 rounded-xl p-12 border border-gray-700/30 text-center">
-                            <Gift className="w-16 h-16 text-yellow-400/30 mx-auto mb-4" />
-                            <p className="text-yellow-400 text-xl font-bold mb-2">
-                              {t("rewards.history.noHistory") || "No reward history yet"}
-                            </p>
-                            <p className="text-gray-400 text-sm mb-6 max-w-md mx-auto">
-                              {t("rewards.history.explanation") || "Your reward transactions will appear here once you start earning through the matrix system"}
-                            </p>
-                            <Button
-                              variant="secondary"
-                              className="bg-black/50 hover:bg-black/70 text-white border border-gray-700"
-                            >
-                              {t("rewards.history.learnMore") || "Learn More"}
-                            </Button>
-                          </div>
-                        ) : (
-                          rewards
-                            .filter((r) => r.status !== "pending")
-                            .map((reward) => (
+                    {activeTab === "history" && (() => {
+                      // Only show withdrawal transactions
+                      const withdrawalTransactions = transactions
+                        .filter(tx => tx.transactionType === "withdrawal")
+                        .map(tx => ({ ...tx, type: 'transaction' as const, sortDate: new Date(tx.createdAt).getTime() }))
+                        .sort((a, b) => b.sortDate - a.sortDate);
+
+                      // Helper function to translate transaction type
+                      const translateTransactionType = (type: string) => {
+                        const translations: Record<string, string> = {
+                          "withdrawal": t("transactions.types.withdrawal") || "Withdrawal",
+                          "deposit": t("transactions.types.deposit") || "Deposit",
+                          "purchase_membership": t("transactions.types.purchaseMembership") || "Purchase Membership",
+                          "purchase": t("transactions.types.purchase") || "Purchase",
+                        };
+                        return translations[type] || type;
+                      };
+
+                      return (
+                        <div className="space-y-3">
+                          {withdrawalTransactions.length === 0 ? (
+                            <div className="bg-gray-900/50 rounded-xl p-12 border border-gray-700/30 text-center">
+                              <Gift className="w-16 h-16 text-yellow-400/30 mx-auto mb-4" />
+                              <p className="text-yellow-400 text-xl font-bold mb-2">
+                                {t("rewards.history.noHistory") || "No withdrawal history yet"}
+                              </p>
+                              <p className="text-gray-400 text-sm mb-6 max-w-md mx-auto">
+                                {t("rewards.history.explanation") || "Your withdrawal transactions will appear here"}
+                              </p>
+                              <Button
+                                variant="secondary"
+                                className="bg-black/50 hover:bg-black/70 text-white border border-gray-700"
+                              >
+                                {t("rewards.history.learnMore") || "Learn More"}
+                              </Button>
+                            </div>
+                          ) : (
+                            withdrawalTransactions.map((tx) => {
+                              return (
                               <div
-                                key={reward.id}
+                                key={`tx-${tx.id}`}
                                 className="bg-gray-900/50 rounded-lg p-4 border border-gray-700/30"
                               >
                                 <div className="flex items-center justify-between">
                                   <div>
                                     <p className="text-white font-medium">
-                                      {reward.rewardType === "direct_sponsor"
-                                        ? t("rewards.types.directSponsor") || "Direct Sponsor"
-                                        : t("rewards.types.layerPayout") || "Layer Payout"}
+                                      {translateTransactionType(tx.transactionType)}
                                     </p>
                                     <p className="text-gray-400 text-sm">
-                                      {new Date(reward.createdAt).toLocaleDateString()}
+                                      {new Date(tx.createdAt).toLocaleDateString()}
                                     </p>
+                                    {tx.txHash && (
+                                      <a
+                                        href={`https://bscscan.com/tx/${tx.txHash}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-yellow-400 text-xs hover:underline mt-1 inline-block"
+                                      >
+                                        View on BSCScan
+                                      </a>
+                                    )}
                                   </div>
                                   <div className="text-right">
-                                    <p className="text-yellow-400 font-medium">
-                                      ${formatNumber(reward.amount)} {reward.currency}
+                                    <p className={`font-bold ${tx.transactionType === "withdrawal" ? "text-red-400" : "text-green-400"}`}>
+                                      {tx.transactionType === "withdrawal" ? "-" : "+"}{formatNumber(parseFloat(tx.amount))} {tx.currency}
                                     </p>
-                                    <p className="text-gray-400 text-xs capitalize">{reward.status}</p>
+                                    <p className="text-gray-400 text-xs capitalize">
+                                      {tx.status === "confirmed" 
+                                        ? t("transactions.status.confirmed") || "Confirmed"
+                                        : tx.status === "pending"
+                                        ? t("transactions.status.pending") || "Pending"
+                                        : tx.status}
+                                    </p>
                                   </div>
                                 </div>
+                                {tx.notes && (
+                                  <p className="text-gray-500 text-xs mt-2">{tx.notes}</p>
+                                )}
                               </div>
-                            ))
-                        )}
-                      </div>
-                    )}
+                              );
+                            })
+                          )}
+                        </div>
+                      );
+                    })()}
                   </>
                 )}
               </div>
