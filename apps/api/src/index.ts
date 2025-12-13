@@ -31,9 +31,8 @@ try {
 
 try {
   if (!envPath) {
-    console.error("❌ Could not find .env file in any of these locations:");
-    possiblePaths.forEach(p => console.error(`   - ${p}`));
-    throw new Error("Could not find .env file in any expected location");
+    console.error("❌ Could not find root .env file at:", rootEnvPath);
+    throw new Error("Could not find root .env file at expected location");
   }
   
   console.log("🔍 Loading .env file from:", envPath);

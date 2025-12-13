@@ -88,7 +88,7 @@ export default function MembershipPage() {
       } else if (level === 1) {
         // New member - need referrer from URL or show error
         if (referrerAddress) {
-          referrer = referrerAddress;
+          referrer = referrerAddress as `0x${string}`;
         } else {
           alert("Please provide a referrer address. Add ?ref=0x... to the URL or visit the membership page with a referral link.");
           return;
@@ -98,7 +98,7 @@ export default function MembershipPage() {
       console.error("Failed to get referrer:", error);
       // If error and Level 1, still check URL
       if (level === 1 && referrerAddress) {
-        referrer = referrerAddress;
+        referrer = referrerAddress as `0x${string}`;
       } else if (level === 1) {
         alert("Please provide a referrer address. Add ?ref=0x... to the URL or visit the membership page with a referral link.");
         return;
