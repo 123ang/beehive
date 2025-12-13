@@ -28,9 +28,11 @@
   },
   "dependencies": {
     "@beehive/shared": "workspace:*",
+    "@google-cloud/kms": "^5.2.1",
     "@hono/node-server": "^1.8.2",
     "@hono/zod-validator": "^0.2.1",
     "bcryptjs": "^3.0.3",
+    "bullmq": "^5.66.0",
     "csv-parse": "^6.1.0",
     "drizzle-orm": "^0.29.3",
     "hono": "^4.0.0",

@@ -87,6 +87,38 @@ export async function processWithdrawal(
       return { success: false, error: "Transaction hash not received" };
     }
 
+    // Fetch transaction receipt to get block number and confirmation time
+    let blockNumber: number | undefined;
+    let confirmedAt: Date | undefined;
+    
+    try {
+      const { createPublicClient, http } = await import("viem");
+      const { bsc, bscTestnet } = await import("viem/chains");
+      
+      const chainId = parseInt(process.env.BSC_CHAIN_ID || "56");
+      const chain = chainId === 97 ? bscTestnet : bsc;
+      const RPC_URL = process.env.BSC_RPC_URL || "https://bsc-dataseed1.binance.org/";
+      
+      const publicClient = createPublicClient({
+        chain,
+        transport: http(RPC_URL),
+      });
+
+      // Get transaction receipt
+      const receipt = await publicClient.getTransactionReceipt({ hash: txHash as `0x${string}` });
+      
+      if (receipt.status === "success") {
+        blockNumber = Number(receipt.blockNumber);
+        
+        // Get block to get timestamp
+        const block = await publicClient.getBlock({ blockNumber: receipt.blockNumber });
+        confirmedAt = new Date(Number(block.timestamp) * 1000); // Convert Unix timestamp to Date
+      }
+    } catch (error) {
+      console.warn("Failed to fetch block info for withdrawal transaction:", error);
+      // Continue without block info - transaction is still recorded
+    }
+
     // Create transaction record (confirmed since blockchain tx succeeded)
     await db
       .insert(transactions)
@@ -97,6 +129,8 @@ export async function processWithdrawal(
         amount: amount.toString(),
         status: "confirmed",
         txHash: txHash,
+        blockNumber: blockNumber,
+        confirmedAt: confirmedAt,
         notes: notes || `Withdrawal of ${amount} ${currency}`,
       });
 

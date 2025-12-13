@@ -74,3 +74,46 @@ export const authRateLimit = rateLimit({
   keyPrefix: "rl:auth",
 });
 
+/**
+ * Financial rate limiter - very strict for withdrawals and purchases
+ * Must be used AFTER authentication middleware
+ * Uses wallet address from authenticated user
+ * Limits: 3 requests per 10 minutes per wallet address
+ */
+export const financialRateLimit = createMiddleware(async (c: Context, next: Next) => {
+  // Get wallet address from authenticated user (must be set by authMiddleware)
+  const user = c.get("user");
+  const walletAddress = user?.walletAddress?.toLowerCase();
+
+  // Fallback to IP if no wallet address (shouldn't happen if auth is working)
+  const rateLimitKey = walletAddress 
+    ? `rl:financial:wallet:${walletAddress}`
+    : `rl:financial:ip:${c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || c.req.header("x-real-ip") || "unknown"}`;
+
+  try {
+    const result = await checkRateLimit(rateLimitKey, 3, 600); // 3 requests per 10 minutes
+
+    // Set rate limit headers
+    c.header("X-RateLimit-Limit", "3");
+    c.header("X-RateLimit-Remaining", result.remaining.toString());
+    c.header("X-RateLimit-Reset", result.resetIn.toString());
+
+    if (!result.allowed) {
+      return c.json(
+        {
+          success: false,
+          error: "Too many financial requests. Please wait before trying again.",
+          retryAfter: result.resetIn,
+        },
+        429
+      );
+    }
+
+    await next();
+  } catch (error) {
+    // If Redis is down, allow the request but log the error
+    console.error("Financial rate limit check failed:", error);
+    await next();
+  }
+});
+

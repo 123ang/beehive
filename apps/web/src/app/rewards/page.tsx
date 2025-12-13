@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { api } from "@/lib/api";
 import { formatNumber, shortenAddress } from "@/lib/utils";
 import { useTranslation } from "@/i18n/TranslationProvider";
+import { Dialog } from "@/components/ui/Dialog";
 import {
   Wallet,
   TrendingUp,
@@ -86,6 +87,17 @@ export default function RewardsPage() {
   const [selectedCurrency, setSelectedCurrency] = useState<"USDT" | "BCC">("USDT");
   const [availableBalance, setAvailableBalance] = useState<string>("0");
   const [bccBalance, setBccBalance] = useState<string>("0");
+  const [dialog, setDialog] = useState<{
+    isOpen: boolean;
+    type: "success" | "error" | "warning" | "info";
+    title?: string;
+    message: string;
+    link?: { url: string; label: string };
+  }>({
+    isOpen: false,
+    type: "info",
+    message: "",
+  });
 
   const walletAddress = searchParams.get("address") || address;
 
@@ -167,12 +179,22 @@ export default function RewardsPage() {
               </p>
               <ConnectButton />
             </motion.div>
-          </div>
-        </section>
-        <Footer />
-      </main>
-    );
-  }
+        </div>
+      </section>
+      <Footer />
+      
+      {/* Dialog for alerts */}
+      <Dialog
+        isOpen={dialog.isOpen}
+        onClose={() => setDialog({ ...dialog, isOpen: false })}
+        type={dialog.type}
+        title={dialog.title}
+        message={dialog.message}
+        link={dialog.link}
+      />
+    </main>
+  );
+}
 
   const claimableAmount = summary ? parseFloat(summary.claimable || "0") : 0;
   const pendingRewards = getPendingRewards();
@@ -591,7 +613,12 @@ export default function RewardsPage() {
                             
                             // Validate address format
                             if (!address.startsWith("0x") || address.length !== 42) {
-                              alert(`Invalid wallet address format. Expected format: 0x followed by 40 hex characters. Got: ${address}`);
+                              setDialog({
+                                isOpen: true,
+                                type: "error",
+                                title: "Invalid Address",
+                                message: `Invalid wallet address format.\n\nExpected format: 0x followed by 40 hex characters.\nGot: ${address}\nLength: ${address.length}`,
+                              });
                               console.error("Invalid address format:", address, "Length:", address.length);
                               return;
                             }
@@ -604,16 +631,37 @@ export default function RewardsPage() {
                             try {
                               const result = await api.withdraw(address, selectedCurrency, amount);
                               if (result.success) {
-                                alert(`Withdrawal successful! Transaction: ${result.data.txHash}\nView on BSCScan: https://bscscan.com/tx/${result.data.txHash}`);
+                                const txHash = result.data.txHash;
+                                const bscScanUrl = `https://bscscan.com/tx/${txHash}`;
+                                setDialog({
+                                  isOpen: true,
+                                  type: "success",
+                                  title: "Withdrawal Successful!",
+                                  message: `Your withdrawal has been processed successfully.\n\nTransaction Hash: ${txHash}`,
+                                  link: {
+                                    url: bscScanUrl,
+                                    label: "View on BSCScan",
+                                  },
+                                });
                                 // Refresh data
                                 await fetchRewards();
                                 setWithdrawAmount("");
                               } else {
-                                alert(`Withdrawal failed: ${result.error}`);
+                                setDialog({
+                                  isOpen: true,
+                                  type: "error",
+                                  title: "Withdrawal Failed",
+                                  message: result.error || "Unknown error occurred",
+                                });
                               }
                             } catch (error: any) {
                               console.error("Withdrawal error:", error);
-                              alert(`Withdrawal failed: ${error.message || "Unknown error"}`);
+                              setDialog({
+                                isOpen: true,
+                                type: "error",
+                                title: "Withdrawal Failed",
+                                message: error.message || "Unknown error occurred",
+                              });
                             }
                           }}
                           className="w-full bg-yellow-600 hover:bg-yellow-700 text-white"
@@ -690,7 +738,7 @@ export default function RewardsPage() {
                                         rel="noopener noreferrer"
                                         className="text-yellow-400 text-xs hover:underline mt-1 inline-block"
                                       >
-                                        View on BSCScan
+                                        {t("transactions.viewOnBSCScan") || "View on BSCScan"}
                                       </a>
                                     )}
                                   </div>
@@ -708,7 +756,33 @@ export default function RewardsPage() {
                                   </div>
                                 </div>
                                 {tx.notes && (
-                                  <p className="text-gray-500 text-xs mt-2">{tx.notes}</p>
+                                  <p className="text-gray-500 text-xs mt-2">
+                                    {(() => {
+                                      // Translate withdrawal notes
+                                      if (tx.transactionType === "withdrawal" && tx.notes) {
+                                        // Parse notes like "Withdrawal of 100 BCC to 0x..."
+                                        const withdrawalMatch = tx.notes.match(/Withdrawal of ([\d.]+) (\w+) to (0x[a-fA-F0-9]+)/i);
+                                        if (withdrawalMatch) {
+                                          const [, amount, currency, address] = withdrawalMatch;
+                                          return t("transactions.withdrawalNote", {
+                                            amount,
+                                            currency,
+                                            address: shortenAddress(address),
+                                          }) || tx.notes;
+                                        }
+                                        // Fallback: try to translate common patterns
+                                        if (tx.notes.includes("Withdrawal of")) {
+                                          return tx.notes.replace(
+                                            /Withdrawal of ([\d.]+) (\w+)/i,
+                                            (_, amount, currency) => 
+                                              t("transactions.withdrawalNoteShort", { amount, currency }) || 
+                                              `${t("transactions.types.withdrawal")} ${amount} ${currency}`
+                                          );
+                                        }
+                                      }
+                                      return tx.notes;
+                                    })()}
+                                  </p>
                                 )}
                               </div>
                               );

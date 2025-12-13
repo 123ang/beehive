@@ -13,6 +13,13 @@ out
 .env.local
 .env.*.local
 
+# Google KMS files
+kms-service-account.json
+**/kms-service-account.json
+encrypted-key.enc
+apps/api/secrets/
+secrets/
+
 # IDE
 .idea
 .vscode

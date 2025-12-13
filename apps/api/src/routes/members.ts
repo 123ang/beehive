@@ -5,9 +5,10 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { db, members, rewards, placements, transactions } from "../db";
+import { db, members, rewards, placements, transactions, withdrawals } from "../db";
 import { eq, desc, sql, asc, and } from "drizzle-orm";
-import { authMiddleware } from "../middleware/auth";
+import { authMiddleware, verifyWalletOwnership } from "../middleware/auth";
+import { financialRateLimit, standardRateLimit } from "../middleware/rateLimit";
 import { matrixService } from "../services/MatrixService";
 import { rewardService } from "../services/RewardService";
 import { MEMBERSHIP_LEVELS } from "@beehive/shared";
@@ -417,7 +418,7 @@ const registerSchema = z.object({
   referrerAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
 });
 
-memberRoutes.post("/register", zValidator("json", registerSchema), async (c) => {
+memberRoutes.post("/register", authMiddleware, zValidator("json", registerSchema), async (c) => {
   const user = c.get("user");
   const { txHash, level, referrerAddress } = c.req.valid("json");
 
@@ -439,6 +440,27 @@ memberRoutes.post("/register", zValidator("json", registerSchema), async (c) => 
     return c.json({ success: false, error: "Invalid referrer" }, 400);
   }
 
+  // Get level info and verify transaction
+  const levelInfo = MEMBERSHIP_LEVELS.find((l) => l.level === level);
+  if (!levelInfo) {
+    return c.json({ success: false, error: "Invalid level" }, 400);
+  }
+
+  // Verify transaction on blockchain before processing
+  const { verifyRegistrationTransaction } = await import("../utils/transactionVerification");
+  const verification = await verifyRegistrationTransaction(
+    txHash,
+    user.walletAddress.toLowerCase(),
+    levelInfo.priceUSDT
+  );
+
+  if (!verification.valid) {
+    return c.json({
+      success: false,
+      error: verification.error || "Transaction verification failed",
+    }, 400);
+  }
+
   // Find placement position
   const placement = await matrixService.findPlacement(sponsor.id);
 
@@ -447,7 +469,6 @@ memberRoutes.post("/register", zValidator("json", registerSchema), async (c) => 
   }
 
   // Create member
-  const levelInfo = MEMBERSHIP_LEVELS.find((l) => l.level === level);
   await db
     .insert(members)
     .values({
@@ -541,7 +562,7 @@ memberRoutes.post("/register", zValidator("json", registerSchema), async (c) => 
 
 /**
  * Upgrade membership level (for existing members)
- * No authentication required - uses walletAddress from request
+ * Requires authentication - user can only upgrade their own membership
  */
 const upgradeSchema = z.object({
   txHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
@@ -549,9 +570,23 @@ const upgradeSchema = z.object({
   walletAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
 });
 
-memberRoutes.post("/upgrade", zValidator("json", upgradeSchema), async (c) => {
-  const { txHash, level, walletAddress } = c.req.valid("json");
-  const normalizedWallet = walletAddress.toLowerCase();
+memberRoutes.post(
+  "/upgrade", 
+  authMiddleware,
+  financialRateLimit,
+  zValidator("json", upgradeSchema), 
+  async (c) => {
+    const user = c.get("user");
+    const { txHash, level, walletAddress } = c.req.valid("json");
+    const normalizedWallet = walletAddress.toLowerCase();
+
+    // Verify wallet address matches authenticated user
+    if (user.walletAddress.toLowerCase() !== normalizedWallet) {
+      return c.json({ 
+        success: false, 
+        error: "Unauthorized: You can only upgrade your own membership" 
+      }, 403);
+    }
 
   // Check if member exists
   const existingMember = await db.query.members.findFirst({
@@ -590,6 +625,21 @@ memberRoutes.post("/upgrade", zValidator("json", upgradeSchema), async (c) => {
         error: `You need at least 3 direct sponsors to upgrade to Level 2. You currently have ${directSponsorsCount} direct sponsor(s).`,
       }, 400);
     }
+  }
+
+  // Verify transaction on blockchain before processing
+  const { verifyUpgradeTransaction } = await import("../utils/transactionVerification");
+  const verification = await verifyUpgradeTransaction(
+    txHash,
+    normalizedWallet,
+    levelInfo.priceUSDT
+  );
+
+  if (!verification.valid) {
+    return c.json({
+      success: false,
+      error: verification.error || "Transaction verification failed",
+    }, 400);
   }
 
   try {
@@ -688,21 +738,18 @@ const withdrawSchema = z.object({
   amount: z.number().positive(),
 });
 
-memberRoutes.post("/withdraw", zValidator("json", withdrawSchema), async (c) => {
-  try {
-    const body = await c.req.json();
-    console.log("Withdrawal request body:", { 
-      walletAddress: body.walletAddress, 
-      currency: body.currency, 
-      amount: body.amount,
-      walletAddressLength: body.walletAddress?.length,
-      walletAddressStartsWith0x: body.walletAddress?.startsWith("0x")
-    });
-    
-    const { walletAddress, currency, amount } = c.req.valid("json");
-    const normalizedWallet = walletAddress.toLowerCase();
+memberRoutes.post(
+  "/withdraw", 
+  standardRateLimit, // Use standard rate limit instead of financial (no auth required)
+  zValidator("json", withdrawSchema), 
+  async (c) => {
+    try {
+      const { walletAddress, currency, amount } = c.req.valid("json");
+      const normalizedWallet = walletAddress.toLowerCase();
 
-    const { processWithdrawal } = await import("../utils/withdrawals");
+      // Balance check is done in processWithdrawal - no need to verify auth
+      // User can only withdraw what they have in their balance
+      const { processWithdrawal } = await import("../utils/withdrawals");
     
     const result = await processWithdrawal({
       walletAddress: normalizedWallet,
@@ -737,6 +784,170 @@ memberRoutes.post("/withdraw", zValidator("json", withdrawSchema), async (c) => 
     return c.json({ 
       success: false, 
       error: error.message || "Failed to process withdrawal" 
+    }, 500);
+  }
+});
+
+/**
+ * Secure withdrawal endpoint (NEW - Queue-based)
+ * Client sends only amount - server derives wallet from authenticated user
+ * Withdrawal is processed asynchronously via worker
+ */
+const secureWithdrawSchema = z.object({
+  amount: z.number().positive(),
+  currency: z.enum(["USDT", "BCC"]),
+});
+
+memberRoutes.post(
+  "/withdraw/v2",
+  authMiddleware,
+  financialRateLimit,
+  zValidator("json", secureWithdrawSchema),
+  async (c) => {
+    try {
+      const user = c.get("user");
+      const { amount, currency } = c.req.valid("json");
+      const normalizedWallet = user.walletAddress.toLowerCase();
+
+      // Step 1: Find member
+      const member = await db.query.members.findFirst({
+        where: eq(members.walletAddress, normalizedWallet),
+      });
+
+      if (!member) {
+        return c.json({ success: false, error: "Member not found" }, 404);
+      }
+
+      // Step 2: Check balance (from database, not client input)
+      let currentBalance: number;
+      if (currency === "BCC") {
+        currentBalance = parseFloat(member.bccBalance?.toString() || "0");
+      } else {
+        // For USDT, calculate from rewards (pending only)
+        const rewardSummary = await rewardService.getRewardSummary(normalizedWallet);
+        currentBalance = parseFloat(rewardSummary.pendingUSDT || "0");
+      }
+
+      if (currentBalance < amount) {
+        return c.json({
+          success: false,
+          error: `Insufficient ${currency} balance. Available: ${currentBalance}, Requested: ${amount}`,
+        }, 400);
+      }
+
+      // Step 3: Create withdrawal request in database
+      await db
+        .insert(withdrawals)
+        .values({
+          userId: user.userId,
+          memberId: member.id,
+          walletAddress: normalizedWallet, // Derived from authenticated user
+          currency,
+          amount: amount.toString(),
+          status: "requested",
+        });
+
+      // Get the inserted withdrawal ID (MySQL doesn't support .returning())
+      const [insertedWithdrawal] = await db
+        .select()
+        .from(withdrawals)
+        .where(eq(withdrawals.walletAddress, normalizedWallet))
+        .orderBy(desc(withdrawals.createdAt))
+        .limit(1);
+
+      if (!insertedWithdrawal) {
+        throw new Error("Failed to create withdrawal request");
+      }
+
+      // Step 4: Add to queue for async processing
+      const { withdrawalQueue } = await import("../queues/withdrawalQueue");
+      await withdrawalQueue.add(
+        `withdrawal-${insertedWithdrawal.id}`,
+        {
+          withdrawalId: insertedWithdrawal.id,
+          userId: user.userId,
+          memberId: member.id,
+          walletAddress: normalizedWallet,
+          currency,
+          amount,
+        },
+        {
+          jobId: `withdrawal-${insertedWithdrawal.id}`, // Ensure idempotency
+        }
+      );
+
+      // Step 5: Log activity
+      const { logMemberActivity } = await import("../utils/memberActivityLogger");
+      await logMemberActivity({
+        walletAddress: normalizedWallet,
+        activityType: "withdrawal",
+        metadata: { currency, amount, withdrawalId: insertedWithdrawal.id },
+      });
+
+      return c.json({
+        success: true,
+        data: {
+          withdrawalId: insertedWithdrawal.id,
+          status: "requested",
+          message: `Withdrawal request created. Processing ${amount} ${currency}...`,
+        },
+      });
+    } catch (error: any) {
+      console.error("Secure withdrawal endpoint error:", error);
+      return c.json({
+        success: false,
+        error: error.message || "Failed to create withdrawal request",
+      }, 500);
+    }
+  }
+);
+
+/**
+ * Get withdrawal status
+ */
+memberRoutes.get("/withdraw/:withdrawalId", authMiddleware, async (c) => {
+  try {
+    const user = c.get("user");
+    const withdrawalId = parseInt(c.req.param("withdrawalId"));
+
+    if (isNaN(withdrawalId)) {
+      return c.json({ success: false, error: "Invalid withdrawal ID" }, 400);
+    }
+
+    const [withdrawal] = await db
+      .select()
+      .from(withdrawals)
+      .where(eq(withdrawals.id, withdrawalId))
+      .limit(1);
+
+    if (!withdrawal) {
+      return c.json({ success: false, error: "Withdrawal not found" }, 404);
+    }
+
+    // Verify withdrawal belongs to authenticated user
+    if (withdrawal.userId !== user.userId) {
+      return c.json({ success: false, error: "Unauthorized" }, 403);
+    }
+
+    return c.json({
+      success: true,
+      data: {
+        id: withdrawal.id,
+        currency: withdrawal.currency,
+        amount: withdrawal.amount,
+        status: withdrawal.status,
+        txHash: withdrawal.onchainTxHash,
+        errorMessage: withdrawal.errorMessage,
+        createdAt: withdrawal.createdAt,
+        processedAt: withdrawal.processedAt,
+        completedAt: withdrawal.completedAt,
+      },
+    });
+  } catch (error: any) {
+    console.error("Get withdrawal status error:", error);
+    return c.json({
+      success: false,
+      error: error.message || "Failed to get withdrawal status",
     }, 500);
   }
 });

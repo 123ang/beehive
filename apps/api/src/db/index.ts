@@ -8,15 +8,9 @@ import * as schema from "./schema";
 // Environment variables are loaded in index.ts
 // No need to load again here - they're already in process.env
 
-// Connection string from environment
-// Default to beehive_user if DATABASE_URL not set
-const connectionString = process.env.DATABASE_URL || "mysql://beehive_user:920214%40Ang@localhost:3306/beehive";
-
-// Log connection info (without password) for debugging
-if (process.env.NODE_ENV !== "production") {
-  const url = new URL(connectionString);
-  console.log(`Database connection: ${url.username}@${url.hostname}:${url.port}/${url.pathname.slice(1)}`);
-}
+// Lazy initialization - only create connection when first accessed
+let _pool: mysql.Pool | null = null;
+let _db: ReturnType<typeof drizzle> | null = null;
 
 // Parse connection string
 function parseConnectionString(url: string) {
@@ -34,23 +28,55 @@ function parseConnectionString(url: string) {
   };
 }
 
-// Create MySQL connection pool
-const poolConfig = parseConnectionString(connectionString);
+// Initialize database connection (lazy)
+function initializeDb() {
+  if (_db) return _db;
 
-// Log connection config (without password) for debugging
-console.log(`🔌 Connecting to MySQL: ${poolConfig.user}@${poolConfig.host}:${poolConfig.port}/${poolConfig.database}`);
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    // Provide helpful error message
+    const errorMsg = 
+      "DATABASE_URL environment variable is required.\n" +
+      "Please set it in your .env file: DATABASE_URL=mysql://user:password@host:port/database\n" +
+      `Current process.env.DATABASE_URL: ${process.env.DATABASE_URL || "undefined"}\n` +
+      "Make sure the .env file is in the root directory and loaded before using the database.";
+    throw new Error(errorMsg);
+  }
 
-const pool = mysql.createPool({
-  ...poolConfig,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-  enableKeepAlive: true,
-  keepAliveInitialDelay: 0,
+  // Log connection info (without password) for debugging
+  if (process.env.NODE_ENV !== "production") {
+    const url = new URL(connectionString);
+    console.log(`Database connection: ${url.username}@${url.hostname}:${url.port}/${url.pathname.slice(1)}`);
+  }
+
+  // Create MySQL connection pool
+  const poolConfig = parseConnectionString(connectionString);
+
+  // Log connection config (without password) for debugging
+  console.log(`🔌 Connecting to MySQL: ${poolConfig.user}@${poolConfig.host}:${poolConfig.port}/${poolConfig.database}`);
+
+  _pool = mysql.createPool({
+    ...poolConfig,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 0,
+  });
+
+  // Create drizzle instance with schema
+  _db = drizzle(_pool, { schema, mode: "default" });
+  
+  return _db;
+}
+
+// Export db with lazy initialization
+export const db = new Proxy({} as ReturnType<typeof drizzle>, {
+  get(target, prop) {
+    const dbInstance = initializeDb();
+    return (dbInstance as any)[prop];
+  }
 });
-
-// Create drizzle instance with schema
-export const db = drizzle(pool, { schema, mode: "default" });
 
 // Export schema for convenience
 export * from "./schema";
@@ -59,7 +85,11 @@ export { memberActivityLogs } from "./schema";
 // Health check function
 export async function checkDatabaseConnection(): Promise<boolean> {
   try {
-    const connection = await pool.getConnection();
+    initializeDb(); // Ensure DB is initialized
+    if (!_pool) {
+      throw new Error("Database pool not initialized");
+    }
+    const connection = await _pool.getConnection();
     await connection.ping();
     connection.release();
     return true;

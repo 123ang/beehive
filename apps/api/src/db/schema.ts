@@ -194,6 +194,35 @@ export const transactions = mysqlTable(
 );
 
 // ============================================
+// WITHDRAWALS TABLE (Secure Queue-Based Withdrawals)
+// ============================================
+export const withdrawals = mysqlTable(
+  "withdrawals",
+  {
+    id: int("id").primaryKey().autoincrement(),
+    userId: int("user_id").notNull(), // From users table
+    memberId: int("member_id"), // From members table (optional, for faster lookup)
+    walletAddress: varchar("wallet_address", { length: 42 }).notNull(), // Derived from authenticated user
+    currency: varchar("currency", { length: 10 }).notNull(), // USDT or BCC
+    amount: decimal("amount", { precision: 36, scale: 18 }).notNull(),
+    status: varchar("status", { length: 20 }).default("requested"), // requested | processing | broadcast | completed | failed
+    onchainTxHash: varchar("onchain_tx_hash", { length: 66 }), // Blockchain transaction hash
+    errorMessage: text("error_message"), // Error if failed
+    createdAt: timestamp("created_at").defaultNow(),
+    processedAt: datetime("processed_at", { mode: "date", fsp: 6 }),
+    completedAt: datetime("completed_at", { mode: "date", fsp: 6 }),
+  },
+  (table) => ({
+    userIdx: index("withdrawals_user_idx").on(table.userId),
+    memberIdx: index("withdrawals_member_idx").on(table.memberId),
+    walletIdx: index("withdrawals_wallet_idx").on(table.walletAddress),
+    statusIdx: index("withdrawals_status_idx").on(table.status),
+    currencyIdx: index("withdrawals_currency_idx").on(table.currency),
+    txHashIdx: index("withdrawals_tx_hash_idx").on(table.onchainTxHash),
+  })
+);
+
+// ============================================
 // LEVELS TABLE
 // ============================================
 export const levels = mysqlTable("levels", {

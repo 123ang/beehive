@@ -7,7 +7,12 @@ import { createWalletClient, createPublicClient, http, formatUnits, parseUnits }
 import { privateKeyToAccount } from "viem/accounts";
 import { bsc, bscTestnet } from "viem/chains";
 import { config } from "dotenv";
-import { resolve } from "path";
+import { resolve, dirname } from "path";
+import { fileURLToPath } from "url";
+
+// Get __dirname equivalent for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Load .env file from project root only
 // Root .env is at: beehive/.env
@@ -71,17 +76,52 @@ export class BlockchainService {
     // Don't initialize here - wait until first use
   }
 
-  private initialize() {
+  private async initialize() {
     if (this.initialized) return;
 
-    const COMPANY_PRIVATE_KEY = getEnvVar("COMPANY_PRIVATE_KEY");
-    
     console.log("🔍 BlockchainService initializing...");
-    console.log("🔍 COMPANY_PRIVATE_KEY:", COMPANY_PRIVATE_KEY ? `Set (${COMPANY_PRIVATE_KEY.length} chars)` : "NOT SET");
+
+    // Try to get private key from KMS or .env
+    let COMPANY_PRIVATE_KEY: string | null = null;
+
+    try {
+      if (getEnvVar("USE_GOOGLE_KMS") === "true") {
+        // Use Google KMS
+        console.log("🔍 Attempting to retrieve private key from Google KMS...");
+        const { kmsService } = await import("./KMSService");
+        COMPANY_PRIVATE_KEY = await kmsService.getPrivateKey();
+        console.log("✅ Retrieved private key from Google KMS");
+      } else {
+        // Fallback to .env for backward compatibility
+        COMPANY_PRIVATE_KEY = getEnvVar("COMPANY_PRIVATE_KEY");
+        if (COMPANY_PRIVATE_KEY) {
+          console.log("⚠️ Using private key from .env (consider using Google KMS for better security)");
+          console.log("🔍 COMPANY_PRIVATE_KEY:", `Set (${COMPANY_PRIVATE_KEY.length} chars)`);
+        }
+      }
+    } catch (error: any) {
+      console.error("❌ Failed to get private key:", error.message);
+      // Try fallback to .env if KMS fails
+      if (getEnvVar("USE_GOOGLE_KMS") === "true") {
+        console.warn("⚠️ KMS failed, trying fallback to .env...");
+        COMPANY_PRIVATE_KEY = getEnvVar("COMPANY_PRIVATE_KEY");
+      }
+    }
     
     if (!COMPANY_PRIVATE_KEY) {
-      console.error("❌ COMPANY_PRIVATE_KEY not set in .env file. Blockchain transfers will not work.");
-      console.error("   Please add COMPANY_PRIVATE_KEY=your_private_key to your .env file");
+      console.error("❌ COMPANY_PRIVATE_KEY not available.");
+      if (getEnvVar("USE_GOOGLE_KMS") === "true") {
+        console.error("   Google KMS is enabled but failed to retrieve key.");
+        console.error("   Please check:");
+        console.error("   - GOOGLE_APPLICATION_CREDENTIALS points to valid service account key");
+        console.error("   - GOOGLE_CLOUD_PROJECT_ID is set");
+        console.error("   - GOOGLE_KMS_ENCRYPTED_KEY_PATH points to encrypted key file");
+        console.error("   - Service account has cloudkms.cryptoKeyDecrypter role");
+      } else {
+        console.error("   Please either:");
+        console.error("   1. Set USE_GOOGLE_KMS=true and configure Google KMS, or");
+        console.error("   2. Add COMPANY_PRIVATE_KEY=your_private_key to your .env file");
+      }
       this.initialized = true;
       return;
     }
@@ -125,7 +165,7 @@ export class BlockchainService {
    * Transfer USDT from company account to recipient
    */
   async transferUSDT(to: string, amount: number): Promise<{ success: boolean; txHash?: string; error?: string }> {
-    this.initialize();
+    await this.initialize();
     
     if (!this.walletClient || !this.publicClient) {
       return { success: false, error: "Blockchain service not initialized" };
@@ -205,6 +245,7 @@ export class BlockchainService {
    * Transfer BCC from company account to recipient
    */
   async transferBCC(to: string, amount: number): Promise<{ success: boolean; txHash?: string; error?: string }> {
+    await this.initialize();
     this.initialize();
     
     if (!this.walletClient || !this.publicClient) {

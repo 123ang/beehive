@@ -67,3 +67,41 @@ export const optionalAuthMiddleware = createMiddleware(async (c: Context, next: 
   await next();
 });
 
+/**
+ * Wallet ownership verification middleware
+ * Verifies that the wallet address in the request matches the authenticated user's wallet
+ * Must be used AFTER authMiddleware
+ */
+export const verifyWalletOwnership = createMiddleware(async (c: Context, next: Next) => {
+  const user = c.get("user");
+  
+  if (!user || !user.walletAddress) {
+    return c.json({ success: false, error: "Authentication required" }, 401);
+  }
+
+  // Try to get wallet address from request body
+  try {
+    const body = await c.req.json();
+    const requestWallet = body.walletAddress?.toLowerCase();
+    const userWallet = user.walletAddress.toLowerCase();
+
+    if (requestWallet && requestWallet !== userWallet) {
+      return c.json({ 
+        success: false, 
+        error: "Unauthorized: Wallet address does not match authenticated user" 
+      }, 403);
+    }
+
+    // Re-create request so body can be read again by validator
+    c.req = new Request(c.req.url, {
+      method: c.req.method,
+      headers: c.req.header(),
+      body: JSON.stringify(body),
+    });
+  } catch (error) {
+    // If we can't read the body, continue (validator will handle it)
+  }
+
+  await next();
+});
+

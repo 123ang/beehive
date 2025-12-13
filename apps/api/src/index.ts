@@ -13,8 +13,9 @@ const __dirname = dirname(__filename);
 
 // Manually load .env file from project root only
 // Root .env is at: beehive/.env
-// From apps/api/src/ or apps/api/dist/, that's ../../.env (two levels up)
-const rootEnvPath = resolve(__dirname, "../../.env");
+// From apps/api/src/ or apps/api/dist/, that's ../../../.env (three levels up)
+// Structure: beehive/ (root) -> apps/ -> api/ -> src/ or dist/
+const rootEnvPath = resolve(__dirname, "../../../.env");
 
 console.log("🔍 Looking for root .env file at:", rootEnvPath);
 
@@ -58,9 +59,17 @@ try {
     }
   }
   console.log(`✅ Loaded .env file from: ${envPath} (${loadedCount} variables)`);
-  console.log("DATABASE_URL:", process.env.DATABASE_URL ? "Set" : "Not set");
+  console.log("DATABASE_URL:", process.env.DATABASE_URL ? `Set (${process.env.DATABASE_URL.substring(0, 30)}...)` : "Not set");
   console.log("COMPANY_PRIVATE_KEY:", process.env.COMPANY_PRIVATE_KEY ? "Set (length: " + process.env.COMPANY_PRIVATE_KEY.length + ")" : "Not set");
   console.log("COMPANY_ACCOUNT_ADDRESS:", process.env.COMPANY_ACCOUNT_ADDRESS || "Not set");
+  
+  // Verify DATABASE_URL is actually set before importing db module
+  if (!process.env.DATABASE_URL) {
+    console.error("❌ CRITICAL: DATABASE_URL is not set after loading .env file!");
+    console.error("   Expected path:", rootEnvPath);
+    console.error("   Please check your .env file contains: DATABASE_URL=mysql://...");
+    throw new Error("DATABASE_URL not found in .env file. Please add it to: " + rootEnvPath);
+  }
 } catch (error: any) {
   // .env file not found or can't be read - use system/PM2 environment variables
   // This is fine in production where PM2 sets env vars
@@ -179,4 +188,13 @@ serve({
   fetch: app.fetch,
   port,
 });
+
+// Start withdrawal worker (only in production or when explicitly enabled)
+if (process.env.ENABLE_WITHDRAWAL_WORKER !== "false") {
+  import("./workers/withdrawalWorker").then(() => {
+    console.log("✅ Withdrawal worker started");
+  }).catch((error) => {
+    console.error("❌ Failed to start withdrawal worker:", error);
+  });
+}
 
