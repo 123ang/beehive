@@ -12,7 +12,7 @@ import {
   okxWallet,
   imTokenWallet,
 } from "@rainbow-me/rainbowkit/wallets";
-import { createConfig, http } from "wagmi";
+import { createConfig, http, type Chain } from "wagmi";
 import { bsc, bscTestnet, arbitrum, arbitrumSepolia } from "wagmi/chains";
 
 // WalletConnect Project ID (get one at https://cloud.walletconnect.com)
@@ -22,7 +22,7 @@ const projectId =
 
 const appName = "Beehive";
 
-const chains = [bsc, bscTestnet, arbitrum, arbitrumSepolia];
+const chains = [bsc, bscTestnet, arbitrum, arbitrumSepolia] as [Chain, ...Chain[]];
 
 // Custom wallet list, similar to the richer modal you want
 const connectors = connectorsForWallets(
