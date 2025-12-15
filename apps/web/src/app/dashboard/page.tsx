@@ -34,6 +34,8 @@ interface DashboardData {
   pendingRewardsBCC: string;
   directReferrals: number;
   teamSize: number;
+  referralCode?: string;
+  referralLink?: string;
 }
 
 export default function DashboardPage() {
@@ -60,8 +62,9 @@ export default function DashboardPage() {
   };
 
   const handleCopyReferral = async () => {
-    if (!address) return;
-    const link = generateReferralLink(address);
+    const code = dashboard?.referralCode;
+    const link = dashboard?.referralLink || (code ? generateReferralLink(code) : "");
+    if (!link) return;
     const success = await copyToClipboard(link);
     if (success) {
       setCopied(true);
@@ -307,7 +310,7 @@ export default function DashboardPage() {
                   <div className="flex gap-2">
                     <input
                       type="text"
-                      value={generateReferralLink(address || "")}
+                      value={dashboard?.referralLink || (dashboard?.referralCode ? generateReferralLink(dashboard.referralCode) : "")}
                       readOnly
                       className="flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-sm text-gray-300 focus:outline-none"
                     />

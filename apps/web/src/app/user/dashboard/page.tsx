@@ -43,6 +43,8 @@ interface DashboardData {
   directReferrals: number;
   teamSize: number;
   username?: string;
+  referralCode?: string;
+  referralLink?: string;
 }
 
 export default function UserDashboardPage() {
@@ -88,8 +90,9 @@ export default function UserDashboardPage() {
   };
 
   const handleCopyReferral = async () => {
-    if (!address) return;
-    const link = generateReferralLink(address);
+    const code = dashboard?.referralCode;
+    const link = dashboard?.referralLink || (code ? generateReferralLink(code) : "");
+    if (!link) return;
     const success = await copyToClipboard(link);
     if (success) {
       setCopied(true);
@@ -98,9 +101,10 @@ export default function UserDashboardPage() {
   };
 
   const handleShare = (platform: "facebook" | "whatsapp" | "twitter" | "telegram") => {
-    if (!address) return;
+    const code = dashboard?.referralCode;
+    const referralLink = dashboard?.referralLink || (code ? generateReferralLink(code) : "");
+    if (!referralLink) return;
     
-    const referralLink = generateReferralLink(address);
     const shareText = `${t("dashboard.shareMessage")} ${referralLink}`;
     const encodedText = encodeURIComponent(shareText);
     const encodedUrl = encodeURIComponent(referralLink);
@@ -413,7 +417,7 @@ export default function UserDashboardPage() {
                   <div className="flex gap-2 mb-4">
                     <input
                       type="text"
-                      value={generateReferralLink(address || "")}
+                    value={dashboard?.referralLink || (dashboard?.referralCode ? generateReferralLink(dashboard.referralCode) : "")}
                       readOnly
                       className="flex-1 bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-sm text-gray-300 focus:outline-none focus:border-yellow-500"
                     />

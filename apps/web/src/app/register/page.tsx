@@ -77,18 +77,34 @@ export default function RegisterPage() {
   }, [urlReferralCode]);
 
   const validateReferralCode = async (code: string) => {
-    // TODO: Call API to validate referral code and get referrer level
-    // For now, simulate validation
-    if (code.length > 0) {
-      // Remove "user_" prefix if present, just show wallet address
-      const walletAddress = code.startsWith("user_") ? code.replace("user_", "") : code;
-      setReferralStatus({
-        valid: true,
-        message: t("register.referralStatus.valid"),
-        referrerInfo: `${walletAddress} (${t("register.referralStatus.level2")})`,
-      });
-    } else {
+    if (!code || code.length === 0) {
       setReferralStatus(null);
+      return;
+    }
+
+    try {
+      const result = await api.validateReferralCode(code);
+      
+      if (result.success && result.data?.valid) {
+        setReferralStatus({
+          valid: true,
+          message: t("register.referralStatus.valid"),
+          referrerInfo: result.data.sponsorUsername 
+            ? `${result.data.sponsorUsername} (Level ${result.data.sponsorLevel})`
+            : `Level ${result.data.sponsorLevel} Member`,
+        });
+      } else {
+        setReferralStatus({
+          valid: false,
+          message: result.error || t("register.referralStatus.invalid"),
+        });
+      }
+    } catch (error) {
+      console.error("Referral code validation error:", error);
+      setReferralStatus({
+        valid: false,
+        message: t("register.referralStatus.invalid"),
+      });
     }
   };
 
@@ -134,19 +150,25 @@ export default function RegisterPage() {
       return;
     }
 
+    if (!isConnected || !address) {
+      setErrors({ wallet: t("register.errors.walletRequired") });
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      // TODO: Implement registration API call
-      console.log("Registering with:", {
-        username: formData.username || null,
-        email: formData.email || null,
-        walletAddress: address,
-        referralCode: formData.referralCode,
-      });
-      
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      
+      const result = await api.register(
+        address,
+        formData.username || undefined,
+        formData.email || undefined,
+        formData.referralCode || undefined
+      );
+
+      if (!result.success) {
+        setErrors({ submit: result.error || t("register.errors.submitFailed") });
+        return;
+      }
+
       // Redirect to membership page
       router.push("/membership");
     } catch (error) {
@@ -327,7 +349,9 @@ export default function RegisterPage() {
                   {t("register.referralCode")} *
                 </label>
                 <div className="relative">
-                  <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center justify-center">
+                    <Users className="w-5 h-5 text-gray-400 pointer-events-none" />
+                  </div>
                   <input
                     type="text"
                     id="referralCode"

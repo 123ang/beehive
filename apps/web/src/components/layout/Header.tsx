@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useAccount } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { motion } from "framer-motion";
@@ -25,21 +26,21 @@ export function Header() {
       <nav className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 md:h-20">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-3">
+          <Link href="/" className="flex items-center">
             <motion.div
-              className="relative w-10 h-10"
-              whileHover={{ scale: 1.05, rotate: 30 }}
+              className="relative w-32 h-32 md:w-40 md:h-40"
+              whileHover={{ scale: 1.05 }}
               transition={{ type: "spring", stiffness: 300 }}
             >
-              {/* Hexagon logo */}
-              <div className="absolute inset-0 hexagon bg-gradient-to-br from-honey-400 to-honey-600" />
-              <div className="absolute inset-1 hexagon bg-dark-100 flex items-center justify-center">
-                <span className="text-honey-400 font-bold text-lg">🐝</span>
-              </div>
+              <Image
+                src="/logo.png"
+                alt="Beehive Logo"
+                width={160}
+                height={160}
+                className="object-contain"
+                priority
+              />
             </motion.div>
-            <span className="text-xl md:text-2xl font-bold text-gradient-gold font-display">
-              Beehive
-            </span>
           </Link>
 
           {/* Main Navigation - Only show when connected */}

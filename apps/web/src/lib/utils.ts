@@ -57,10 +57,10 @@ export async function copyToClipboard(text: string): Promise<boolean> {
   }
 }
 
-// Generate referral link
-export function generateReferralLink(address: string): string {
+// Generate referral link (uses referral code)
+export function generateReferralLink(referralCode: string): string {
   const base = typeof window !== "undefined" ? window.location.origin : "https://beehive-lifestyle.io";
-  return `${base}/register?referral_code=${address}`;
+  return `${base}/register?referral_code=${referralCode}`;
 }
 
 // Get level color

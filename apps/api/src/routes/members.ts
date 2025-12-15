@@ -11,6 +11,7 @@ import { authMiddleware, verifyWalletOwnership } from "../middleware/auth";
 import { financialRateLimit, standardRateLimit } from "../middleware/rateLimit";
 import { matrixService } from "../services/MatrixService";
 import { rewardService } from "../services/RewardService";
+import { generateMemberId, generateReferralCode } from "../utils/referralCode";
 import { MEMBERSHIP_LEVELS } from "@beehive/shared";
 import memberNewsRouter from "./members/news";
 import memberMerchantsRouter from "./members/merchants";
@@ -73,6 +74,39 @@ memberRoutes.get("/dashboard", async (c) => {
     });
   }
 
+  // Ensure referral code exists and build referral link
+  let referralCode = member.referralCode;
+  let memberId = member.memberId;
+
+  if (!memberId) {
+    memberId = generateMemberId(member.id);
+  }
+
+  if (!referralCode) {
+    let attempts = 0;
+    const maxAttempts = 10;
+    do {
+      referralCode = generateReferralCode();
+      attempts++;
+      const existing = await db
+        .select()
+        .from(members)
+        .where(eq(members.referralCode, referralCode))
+        .limit(1);
+      if (existing.length === 0) break;
+      if (attempts >= maxAttempts) {
+        throw new Error(`Failed to generate unique referral code after ${maxAttempts} attempts`);
+      }
+    } while (true);
+
+    await db
+      .update(members)
+      .set({ referralCode, memberId })
+      .where(eq(members.id, member.id));
+  }
+
+  const referralLink = `${process.env.FRONTEND_URL || "http://localhost:3001"}/register?referral_code=${referralCode}`;
+
   // Get reward summary
   const rewardSummary = await rewardService.getRewardSummary(address);
 
@@ -103,6 +137,8 @@ memberRoutes.get("/dashboard", async (c) => {
       teamSize,
       totalInflow: member.totalInflow,
       joinedAt: member.joinedAt,
+      referralCode,
+      referralLink,
     },
   });
 });
@@ -399,10 +435,44 @@ memberRoutes.get("/referral", async (c) => {
     .orderBy(desc(members.joinedAt))
     .limit(50);
 
+  // Ensure referral code exists; generate if missing
+  let referralCode = member.referralCode;
+  let memberId = member.memberId;
+
+  if (!memberId) {
+    memberId = generateMemberId(member.id);
+  }
+
+  if (!referralCode) {
+    let attempts = 0;
+    const maxAttempts = 10;
+    do {
+      referralCode = generateReferralCode();
+      attempts++;
+      const existing = await db
+        .select()
+        .from(members)
+        .where(eq(members.referralCode, referralCode))
+        .limit(1);
+      if (existing.length === 0) break;
+      if (attempts >= maxAttempts) {
+        throw new Error(`Failed to generate unique referral code after ${maxAttempts} attempts`);
+      }
+    } while (true);
+
+    await db
+      .update(members)
+      .set({ referralCode, memberId })
+      .where(eq(members.id, member.id));
+  }
+
+  const referralLink = `${process.env.FRONTEND_URL || "http://localhost:3001"}/register?referral_code=${referralCode}`;
+
   return c.json({
     success: true,
     data: {
-      referralCode: member.walletAddress,
+      referralCode,
+      referralLink,
       directReferralCount: directReferrals.length,
       directReferrals,
     },

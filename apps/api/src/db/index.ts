@@ -8,9 +8,12 @@ import * as schema from "./schema";
 // Environment variables are loaded in index.ts
 // No need to load again here - they're already in process.env
 
+// Define the db type with schema for proper type inference
+type DbType = ReturnType<typeof drizzle<typeof schema>>;
+
 // Lazy initialization - only create connection when first accessed
 let _pool: mysql.Pool | null = null;
-let _db: ReturnType<typeof drizzle> | null = null;
+let _db: DbType | null = null;
 
 // Parse connection string
 function parseConnectionString(url: string) {
@@ -29,8 +32,8 @@ function parseConnectionString(url: string) {
 }
 
 // Initialize database connection (lazy)
-function initializeDb() {
-  if (_db) return _db;
+function initializeDb(): DbType {
+  if (_db) return _db as DbType;
 
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
@@ -65,18 +68,18 @@ function initializeDb() {
   });
 
   // Create drizzle instance with schema
-  _db = drizzle(_pool, { schema, mode: "default" });
+  _db = drizzle(_pool, { schema, mode: "default" }) as DbType;
   
   return _db;
 }
 
-// Export db with lazy initialization
-export const db = new Proxy({} as ReturnType<typeof drizzle>, {
+// Export db with lazy initialization and proper typing
+export const db: DbType = new Proxy({} as DbType, {
   get(target, prop) {
     const dbInstance = initializeDb();
     return (dbInstance as any)[prop];
   }
-});
+}) as DbType;
 
 // Export schema for convenience
 export * from "./schema";

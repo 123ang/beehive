@@ -40,7 +40,6 @@ export const users = mysqlTable(
     status: varchar("status", { length: 20 }).default("active"), // active, suspended, inactive
     totalSpent: decimal("total_spent", { precision: 36, scale: 18 }).default("0"),
     totalRewards: decimal("total_rewards", { precision: 36, scale: 18 }).default("0"),
-    referralCode: varchar("referral_code", { length: 50 }).unique(),
     sponsorId: int("sponsor_id"),
     sponsorAddress: varchar("sponsor_address", { length: 42 }),
     memberId: varchar("member_id", { length: 50 }).unique(),
@@ -53,7 +52,6 @@ export const users = mysqlTable(
   },
   (table) => ({
     walletIdx: uniqueIndex("users_wallet_idx").on(table.walletAddress),
-    referralCodeIdx: uniqueIndex("users_referral_code_idx").on(table.referralCode),
     memberIdIdx: uniqueIndex("users_member_id_idx").on(table.memberId),
     sponsorIdx: index("users_sponsor_idx").on(table.sponsorId),
   })
@@ -547,12 +545,15 @@ export const nftCollections = mysqlTable("nft_collections", {
   id: int("id").primaryKey().autoincrement(),
   shortName: varchar("short_name", { length: 50 }).notNull().unique(),
   name: varchar("name", { length: 255 }).notNull(),
-  bccReward: decimal("bcc_reward", { precision: 36, scale: 18 }).notNull(),
+  bccPrice: decimal("bcc_price", { precision: 36, scale: 18 }).notNull(), // Price in BCC to buy one NFT
+  bccReward: decimal("bcc_reward", { precision: 36, scale: 18 }).notNull(), // BCC reward when NFT is purchased
   description: text("description"),
   imageUrl: text("image_url"),
   active: boolean("active").default(true),
   maxSupply: int("max_supply").notNull(),
-  minted: int("minted").default(0),
+  minted: int("minted").default(0), // Total minted to company wallet
+  sold: int("sold").default(0), // Total sold to users
+  contractAddress: varchar("contract_address", { length: 42 }), // NFT contract address
   contractCollectionId: int("contract_collection_id"), // ID from smart contract
   createdBy: int("created_by").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
@@ -560,6 +561,52 @@ export const nftCollections = mysqlTable("nft_collections", {
 }, (table) => ({
   shortNameIdx: uniqueIndex("nft_collections_short_name_idx").on(table.shortName),
   activeIdx: index("nft_collections_active_idx").on(table.active),
+}));
+
+// ============================================
+// USER NFTs TABLE (Tracks NFT ownership)
+// ============================================
+
+// User NFTs Table - Tracks which NFTs each user owns
+export const userNfts = mysqlTable("user_nfts", {
+  id: int("id").primaryKey().autoincrement(),
+  walletAddress: varchar("wallet_address", { length: 42 }).notNull(),
+  collectionId: int("collection_id").notNull(), // FK to nftCollections
+  tokenId: int("token_id").notNull(), // NFT token ID in the collection
+  purchasePrice: decimal("purchase_price", { precision: 36, scale: 18 }).notNull(), // Price paid in BCC
+  purchaseTxHash: varchar("purchase_tx_hash", { length: 66 }), // BCC payment tx
+  mintTxHash: varchar("mint_tx_hash", { length: 66 }), // NFT transfer/mint tx
+  status: varchar("status", { length: 20 }).default("pending"), // pending, completed, failed
+  purchasedAt: timestamp("purchased_at").defaultNow(),
+  completedAt: datetime("completed_at", { mode: "date", fsp: 6 }),
+}, (table) => ({
+  walletIdx: index("user_nfts_wallet_idx").on(table.walletAddress),
+  collectionIdx: index("user_nfts_collection_idx").on(table.collectionId),
+  statusIdx: index("user_nfts_status_idx").on(table.status),
+  tokenIdx: uniqueIndex("user_nfts_collection_token_idx").on(table.collectionId, table.tokenId),
+}));
+
+// ============================================
+// NFT PURCHASE QUEUE TABLE (For async processing)
+// ============================================
+
+// NFT Purchase Queue - Handles async purchase processing
+export const nftPurchaseQueue = mysqlTable("nft_purchase_queue", {
+  id: int("id").primaryKey().autoincrement(),
+  walletAddress: varchar("wallet_address", { length: 42 }).notNull(),
+  collectionId: int("collection_id").notNull(),
+  quantity: int("quantity").default(1).notNull(),
+  totalBccPrice: decimal("total_bcc_price", { precision: 36, scale: 18 }).notNull(),
+  paymentTxHash: varchar("payment_tx_hash", { length: 66 }), // User's BCC payment tx
+  status: varchar("status", { length: 20 }).default("pending"), // pending, processing, completed, failed
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at").defaultNow(),
+  processedAt: datetime("processed_at", { mode: "date", fsp: 6 }),
+  completedAt: datetime("completed_at", { mode: "date", fsp: 6 }),
+}, (table) => ({
+  walletIdx: index("nft_purchase_queue_wallet_idx").on(table.walletAddress),
+  collectionIdx: index("nft_purchase_queue_collection_idx").on(table.collectionId),
+  statusIdx: index("nft_purchase_queue_status_idx").on(table.status),
 }));
 
 // ============================================
@@ -621,6 +668,10 @@ export type NftCollection = typeof nftCollections.$inferSelect;
 export type NewNftCollection = typeof nftCollections.$inferInsert;
 export type NewsletterSubscription = typeof newsletterSubscriptions.$inferSelect;
 export type NewNewsletterSubscription = typeof newsletterSubscriptions.$inferInsert;
+export type UserNft = typeof userNfts.$inferSelect;
+export type NewUserNft = typeof userNfts.$inferInsert;
+export type NftPurchaseQueue = typeof nftPurchaseQueue.$inferSelect;
+export type NewNftPurchaseQueue = typeof nftPurchaseQueue.$inferInsert;
 
 // ============================================
 // MEMBER ACTIVITY LOGS TABLE

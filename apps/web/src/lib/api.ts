@@ -95,6 +95,17 @@ class ApiClient {
     return this.request<any>("/api/auth/me");
   }
 
+  async validateReferralCode(code: string) {
+    return this.request<any>(`/api/auth/validate-referral-code?code=${encodeURIComponent(code)}`);
+  }
+
+  async register(walletAddress: string, username?: string, email?: string, referralCode?: string) {
+    return this.request<any>("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ walletAddress, username, email, referralCode }),
+    });
+  }
+
   // Member endpoints
   async getDashboard(address?: string) {
     const url = address 

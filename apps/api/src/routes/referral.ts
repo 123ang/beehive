@@ -39,7 +39,7 @@ referralRoutes.post("/generate", async (c) => {
         data: {
           referralCode: member.referralCode,
           memberId: member.memberId,
-          referralLink: `${process.env.FRONTEND_URL || "https://beehive-lifestyle.io"}/register?ref=${member.referralCode}`,
+          referralLink: `${process.env.FRONTEND_URL || "https://beehive-lifestyle.io"}/register?referral_code=${member.referralCode}`,
         },
       });
     }
@@ -93,7 +93,7 @@ referralRoutes.post("/generate", async (c) => {
       data: {
         referralCode: finalReferralCode,
         memberId,
-        referralLink: `${process.env.FRONTEND_URL || "https://beehive-lifestyle.io"}/register?ref=${finalReferralCode}`,
+        referralLink: `${process.env.FRONTEND_URL || "https://beehive-lifestyle.io"}/register?referral_code=${finalReferralCode}`,
       },
     });
   } catch (error) {
