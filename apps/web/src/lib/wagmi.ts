@@ -12,8 +12,9 @@ import {
   okxWallet,
   imTokenWallet,
 } from "@rainbow-me/rainbowkit/wallets";
-import { createConfig, http, type Chain } from "wagmi";
+import { createConfig, http } from "wagmi";
 import { bsc, bscTestnet, arbitrum, arbitrumSepolia } from "wagmi/chains";
+import type { Chain } from "viem";
 
 // WalletConnect Project ID (get one at https://cloud.walletconnect.com)
 // IMPORTANT: This must be set in .env file BEFORE building
