@@ -14,17 +14,9 @@
 import { createWalletClient, createPublicClient, http, parseUnits, formatUnits } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { bsc, bscTestnet } from "viem/chains";
-import { config } from "dotenv";
-import { resolve, dirname } from "path";
-import { fileURLToPath } from "url";
 
-// Get __dirname equivalent for ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-// Load .env file from project root
-const rootEnvPath = resolve(__dirname, "../../../.env");
-config({ path: rootEnvPath });
+// Note: .env file is already loaded by index.ts before this service is imported
+// Environment variables are available via process.env
 
 // NFT1155Marketplace ABI (your contract)
 const NFT1155_MARKETPLACE_ABI = [

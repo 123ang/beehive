@@ -6,25 +6,9 @@
 import { createWalletClient, createPublicClient, http, formatUnits, parseUnits } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { bsc, bscTestnet } from "viem/chains";
-import { config } from "dotenv";
-import { resolve, dirname } from "path";
-import { fileURLToPath } from "url";
 
-// Get __dirname equivalent for ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-// Load .env file from project root only
-// Root .env is at: beehive/.env
-// From apps/api/src/services/ or apps/api/dist/services/, that's ../../../.env (three levels up)
-const rootEnvPath = resolve(__dirname, "../../../.env");
-
-const result = config({ path: rootEnvPath });
-if (!result.error) {
-  console.log(`✅ BlockchainService: Loaded root .env from ${rootEnvPath}`);
-} else {
-  console.warn(`⚠️ BlockchainService: Could not load root .env from ${rootEnvPath}`);
-}
+// Note: .env file is already loaded by index.ts before this service is imported
+// Environment variables are available via process.env
 
 // ERC20 ABI for transfer function
 const ERC20_ABI = [
