@@ -34,7 +34,7 @@ interface PurchaseModalProps {
   onSuccess?: () => void;
 }
 
-type Step = "preview" | "approve" | "approving" | "purchase" | "purchasing" | "success" | "error";
+type Step = "preview" | "approve" | "approving" | "purchase" | "purchasing" | "registering" | "success" | "error";
 
 export function PurchaseModal({
   isOpen,
@@ -60,6 +60,7 @@ export function PurchaseModal({
     isPurchasing,
     isPurchaseConfirming,
     isPurchaseSuccess,
+    isRegistering,
     hash,
     error: purchaseError,
     refetchAllowance,
@@ -98,20 +99,28 @@ export function PurchaseModal({
     }
   }, [isOpen, address, refetchBalance]);
 
-  // Handle purchase success
+  // Handle purchase success - move to registering step
   useEffect(() => {
     if (isPurchaseSuccess && step === "purchasing") {
-      setStep("success");
+      setStep("registering");
       onSuccess?.();
+    }
+  }, [isPurchaseSuccess, step, onSuccess]);
+
+  // Handle registration/upgrade completion - redirect to dashboard
+  useEffect(() => {
+    if (step === "registering" && !isRegistering) {
+      // Registration/upgrade completed, show success briefly then redirect
+      setStep("success");
       
-      // Redirect to dashboard after 2 seconds
+      // Redirect to dashboard after 1.5 seconds
       const redirectTimer = setTimeout(() => {
         router.push("/user/dashboard");
-      }, 2000);
+      }, 1500);
       
       return () => clearTimeout(redirectTimer);
     }
-  }, [isPurchaseSuccess, step, onSuccess, router]);
+  }, [step, isRegistering, router]);
 
   // Handle purchase error
   useEffect(() => {
@@ -302,12 +311,14 @@ export function PurchaseModal({
                   className={`w-8 h-8 rounded-full flex items-center justify-center ${
                     step === "purchasing"
                       ? "bg-honey-500 text-black"
-                      : step === "success"
+                      : step === "registering" || step === "success"
                       ? "bg-green-500 text-black"
                       : "bg-white/10 text-gray-500"
                   }`}
                 >
                   {step === "purchasing" ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : step === "registering" ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
                   ) : step === "success" ? (
                     <Check className="w-4 h-4" />
@@ -319,12 +330,18 @@ export function PurchaseModal({
                   className={
                     step === "purchasing"
                       ? "text-honey-400"
-                      : step === "success"
+                      : step === "registering" || step === "success"
                       ? "text-green-400"
                       : "text-gray-500"
                   }
                 >
-                  {step === "purchasing" ? "Processing..." : step === "success" ? "Completed" : "Purchase"}
+                  {step === "purchasing" 
+                    ? "Processing..." 
+                    : step === "registering" 
+                    ? "Registering..." 
+                    : step === "success" 
+                    ? "Completed" 
+                    : "Purchase"}
                 </span>
               </div>
             </div>
@@ -336,16 +353,10 @@ export function PurchaseModal({
                   <p className="text-gray-400 mb-2">
                     Waiting for transaction confirmation...
                   </p>
-                  {level === 1 && (
-                    <p className="text-gray-500 text-sm">
-                      Processing 2 transactions: Company (100 USDT) + IT (30 USDT)
-                    </p>
-                  )}
-                  {level > 1 && (
-                    <p className="text-gray-500 text-sm">
-                      Processing transaction to company account ({levelInfo?.priceUSDT} USDT)
-                    </p>
-                  )}
+                  <p className="text-gray-500 text-sm">
+                    Processing transaction to company account ({levelInfo?.priceUSDT} USDT)
+                    {level === 1 && " - System will automatically split payment (100 to company, 30 to IT)"}
+                  </p>
                   <p className="text-gray-500 text-xs mt-2">
                     This usually takes 3-10 seconds on BSC...
                   </p>
@@ -404,6 +415,39 @@ export function PurchaseModal({
           </div>
         )}
 
+        {/* Registering State */}
+        {step === "registering" && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="text-center py-8"
+          >
+            <div className="w-16 h-16 rounded-full bg-blue-500/20 flex items-center justify-center mx-auto mb-4">
+              <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
+            </div>
+            <h3 className="text-xl font-bold text-white mb-2">
+              Processing Your Membership...
+            </h3>
+            <p className="text-gray-400 mb-4">
+              Registering your account and setting up your rewards. Please wait...
+            </p>
+            {hash && (
+              <a
+                href={
+                  chainId === 97 || chainId === 56
+                    ? `https://${chainId === 97 ? "testnet." : ""}bscscan.com/tx/${hash}`
+                    : `https://arbiscan.io/tx/${hash}`
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-honey-400 text-sm hover:underline"
+              >
+                View Transaction {chainId === 97 || chainId === 56 ? "on BSCScan" : "on Arbiscan"}
+              </a>
+            )}
+          </motion.div>
+        )}
+
         {/* Success State */}
         {step === "success" && (
           <motion.div
@@ -412,13 +456,13 @@ export function PurchaseModal({
             className="text-center py-8"
           >
             <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-4">
-              <Crown className="w-8 h-8 text-green-400" />
+              <Loader2 className="w-8 h-8 text-green-400 animate-spin" />
             </div>
             <h3 className="text-xl font-bold text-white mb-2">
               Welcome to Level {level}!
             </h3>
             <p className="text-gray-400 mb-4">
-              You are now a {levelInfo.name} member.
+              You are now a {levelInfo.name} member. Redirecting to dashboard...
             </p>
             {hash && (
               <a

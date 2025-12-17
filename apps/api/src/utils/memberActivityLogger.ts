@@ -11,6 +11,7 @@ export type MemberActivityType =
 
 export interface MemberActivityData {
   walletAddress: string;
+  memberId?: number; // Optional: if provided, will use this instead of looking up
   activityType: MemberActivityType;
   metadata?: Record<string, any>;
 }
@@ -30,20 +31,43 @@ export async function logMemberActivity(data: MemberActivityData) {
   try {
     const normalizedWallet = data.walletAddress.toLowerCase();
     
-    // Get member ID from wallet address
-    const member = await db.query.members.findFirst({
-      where: eq(members.walletAddress, normalizedWallet),
-      columns: { id: true },
-    });
+    let memberId: number | null = null;
+    
+    // If memberId is provided and is a valid number, use it directly
+    if (data.memberId !== undefined && data.memberId !== null && typeof data.memberId === 'number' && data.memberId > 0) {
+      memberId = data.memberId;
+      console.log(`📝 Using provided memberId: ${memberId} for activity ${data.activityType}`);
+    } else {
+      // Otherwise, look up member ID from wallet address
+      console.log(`🔍 Looking up memberId for wallet ${normalizedWallet}...`);
+      const member = await db.query.members.findFirst({
+        where: eq(members.walletAddress, normalizedWallet),
+        columns: { id: true },
+      });
+      
+      if (member?.id) {
+        memberId = member.id;
+        console.log(`✅ Found memberId: ${memberId} for wallet ${normalizedWallet}`);
+      } else {
+        console.warn(`⚠️ Member not found in database for wallet ${normalizedWallet}`);
+        memberId = null;
+      }
+    }
+
+    if (!memberId) {
+      console.warn(`⚠️ Member ID not found for wallet ${normalizedWallet} when logging activity ${data.activityType}. Activity will be logged without memberId.`);
+    }
 
     await db.insert(memberActivityLogs).values({
       walletAddress: normalizedWallet,
-      memberId: member?.id || null,
+      memberId: memberId,
       activityType: data.activityType,
       metadata: data.metadata ? JSON.stringify(data.metadata) : null,
     });
+
+    console.log(`✅ Logged member activity: ${data.activityType} for member ${memberId || 'unknown'} (${normalizedWallet})`);
   } catch (error) {
-    console.error("Failed to log member activity:", error);
+    console.error(`❌ Failed to log member activity for ${data.walletAddress}:`, error);
     // Don't throw error to prevent disrupting main flow
   }
 }

@@ -139,9 +139,18 @@ export class BlockchainService {
       console.log("✅ BlockchainService initialized successfully");
       console.log("   Chain:", this.chain.name);
       console.log("   RPC:", RPC_URL);
-    } catch (error) {
+      console.log("   Account:", this.account.address);
+    } catch (error: any) {
       console.error("❌ Failed to initialize blockchain service:", error);
+      console.error("   Error details:", error.message);
+      console.error("   Stack:", error.stack);
+      // Don't set initialized = true on error, so it can retry
+      // But set it to prevent infinite retry loops
       this.initialized = true;
+      // Clear clients to ensure they're null
+      this.walletClient = null;
+      this.publicClient = null;
+      this.account = null;
     }
   }
 
@@ -149,19 +158,38 @@ export class BlockchainService {
    * Transfer USDT from company account to recipient
    */
   async transferUSDT(to: string, amount: number): Promise<{ success: boolean; txHash?: string; error?: string }> {
+    console.log(`\n💰 ============================================`);
+    console.log(`💰 BLOCKCHAIN SERVICE: USDT TRANSFER`);
+    console.log(`💰 ============================================`);
+    console.log(`💰 Initializing blockchain service...`);
+    
     await this.initialize();
     
     if (!this.walletClient || !this.publicClient) {
+      console.error(`❌ Blockchain service not initialized!`);
+      console.error(`❌ walletClient: ${!!this.walletClient}`);
+      console.error(`❌ publicClient: ${!!this.publicClient}`);
+      console.error(`❌ account: ${!!this.account}`);
       return { success: false, error: "Blockchain service not initialized" };
     }
 
+    console.log(`✅ Blockchain service initialized`);
+    console.log(`💰 Account: ${this.account?.address}`);
+    console.log(`💰 Chain: ${this.chain.name} (ID: ${this.chain.id})`);
+
     try {
       const USDT_CONTRACT = getEnvVar("USDT_CONTRACT_ADDRESS", "0x23D744B43aEe545DaBeC0D2081bD381Ab80C7d85");
-      const COMPANY_ACCOUNT = getEnvVar("COMPANY_ACCOUNT_ADDRESS", "0xba48b5b1f835ebfc5174c982405b3a7a11b655d0");
+      const COMPANY_ACCOUNT = getEnvVar("COMPANY_ACCOUNT_ADDRESS", "0x325d4a6f26babf3fb54a838a2fe6a79cf3087cf7");
+      
+      console.log(`💰 USDT Contract: ${USDT_CONTRACT}`);
+      console.log(`💰 Company Account: ${COMPANY_ACCOUNT}`);
+      console.log(`💰 Recipient: ${to}`);
+      console.log(`💰 Amount: ${amount} USDT`);
       
       // Get USDT decimals from env or default to 6
       let usdtDecimals = parseInt(getEnvVar("USDT_DECIMALS", "0"));
       if (usdtDecimals === 0) {
+        console.log(`💰 Reading USDT decimals from contract...`);
         // Not set in env, try to read from contract
         try {
           const decimals = await this.publicClient.readContract({
@@ -170,19 +198,21 @@ export class BlockchainService {
             functionName: "decimals",
           });
           usdtDecimals = Number(decimals);
-          console.log("   USDT Token Decimals (from contract):", usdtDecimals);
-        } catch (error) {
-          console.warn("   Could not read USDT decimals from contract, using default 6");
+          console.log(`✅ USDT Decimals: ${usdtDecimals}`);
+        } catch (error: any) {
+          console.warn(`⚠️ Failed to read decimals, using default 6:`, error.message);
           usdtDecimals = 6; // Default fallback
         }
       } else {
-        console.log("   USDT Token Decimals (from .env):", usdtDecimals);
+        console.log(`💰 USDT Decimals (from env): ${usdtDecimals}`);
       }
       
       // Parse amount using actual decimals
       const amountWei = parseUnits(amount.toString(), usdtDecimals);
+      console.log(`💰 Amount (wei): ${amountWei.toString()}`);
 
-      // Check company balance
+      // Check company USDT balance
+      console.log(`💰 Checking company USDT balance...`);
       const balance = await this.publicClient.readContract({
         address: USDT_CONTRACT as `0x${string}`,
         abi: ERC20_ABI,
@@ -191,14 +221,40 @@ export class BlockchainService {
       });
 
       const balanceFormatted = parseFloat(formatUnits(balance, usdtDecimals));
+      console.log(`💰 Company USDT Balance: ${balanceFormatted} USDT`);
+      
       if (balanceFormatted < amount) {
+        console.error(`❌ Insufficient USDT balance! Company has ${balanceFormatted} USDT, needs ${amount} USDT`);
         return {
           success: false,
           error: `Insufficient USDT balance. Company has ${balanceFormatted} USDT, requested ${amount} USDT`,
         };
       }
 
+      // Check company BNB balance (needed for gas fees)
+      console.log(`💰 Checking company BNB balance (for gas fees)...`);
+      const bnbBalance = await this.publicClient.getBalance({
+        address: COMPANY_ACCOUNT as `0x${string}`,
+      });
+      const bnbBalanceFormatted = parseFloat(formatUnits(bnbBalance, 18));
+      console.log(`💰 Company BNB Balance: ${bnbBalanceFormatted} BNB`);
+      
+      // Estimate gas cost (rough estimate: 0.0001 BNB should be enough for a simple transfer)
+      const minBNBRequired = 0.0001; // Minimum BNB needed for gas
+      if (bnbBalanceFormatted < minBNBRequired) {
+        console.error(`❌ Insufficient BNB for gas fees! Company has ${bnbBalanceFormatted} BNB, needs at least ${minBNBRequired} BNB`);
+        return {
+          success: false,
+          error: `Insufficient BNB balance for gas fees. Company has ${bnbBalanceFormatted} BNB, needs at least ${minBNBRequired} BNB to execute the transfer. Please add BNB to the company wallet.`,
+        };
+      }
+
       // Execute transfer
+      console.log(`💰 Executing USDT transfer...`);
+      console.log(`💰 Contract: ${USDT_CONTRACT}`);
+      console.log(`💰 Function: transfer`);
+      console.log(`💰 Args: to=${to}, amount=${amountWei.toString()}`);
+      
       const hash = await this.walletClient.writeContract({
         account: this.account!,
         chain: this.chain,
@@ -208,16 +264,42 @@ export class BlockchainService {
         args: [to as `0x${string}`, amountWei],
       });
 
+      console.log(`✅ Transfer transaction submitted!`);
+      console.log(`💰 Transaction Hash: ${hash}`);
+      console.log(`💰 Waiting for confirmation...`);
+
       // Wait for transaction confirmation
       const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
 
+      console.log(`💰 Transaction Receipt Status: ${receipt.status}`);
+      console.log(`💰 Block Number: ${receipt.blockNumber}`);
+      console.log(`💰 Gas Used: ${receipt.gasUsed.toString()}`);
+
       if (receipt.status === "success") {
+        console.log(`✅ ============================================`);
+        console.log(`✅ USDT TRANSFER SUCCESSFUL`);
+        console.log(`✅ ============================================`);
+        console.log(`✅ Transaction Hash: ${hash}`);
+        console.log(`✅ Amount: ${amount} USDT`);
+        console.log(`✅ From: ${COMPANY_ACCOUNT}`);
+        console.log(`✅ To: ${to}`);
+        console.log(`✅ Block: ${receipt.blockNumber}`);
+        console.log(`✅ ============================================\n`);
         return { success: true, txHash: hash };
       } else {
+        console.error(`❌ Transaction failed on blockchain!`);
         return { success: false, error: "Transaction failed" };
       }
     } catch (error: any) {
-      console.error("USDT transfer error:", error);
+      console.error(`\n❌ ============================================`);
+      console.error(`❌ USDT TRANSFER EXCEPTION`);
+      console.error(`❌ ============================================`);
+      console.error(`❌ Error Type: ${error.constructor.name}`);
+      console.error(`❌ Error Message: ${error.message}`);
+      console.error(`❌ Error Stack:`, error.stack);
+      console.error(`❌ Recipient: ${to}`);
+      console.error(`❌ Amount: ${amount} USDT`);
+      console.error(`❌ ============================================\n`);
       return {
         success: false,
         error: error.message || "Failed to transfer USDT",
@@ -238,7 +320,7 @@ export class BlockchainService {
 
     try {
       const BCC_CONTRACT = getEnvVar("BCC_TOKEN_CONTRACT_ADDRESS", "0xe1d791FE419ee701FbC55dd1AA4107bcd5AB7FC8");
-      const COMPANY_ACCOUNT = getEnvVar("COMPANY_ACCOUNT_ADDRESS", "0xba48b5b1f835ebfc5174c982405b3a7a11b655d0");
+      const COMPANY_ACCOUNT = getEnvVar("COMPANY_ACCOUNT_ADDRESS", "0x325d4a6f26babf3fb54a838a2fe6a79cf3087cf7");
       
       console.log("🔍 BCC Transfer Details:");
       console.log("   BCC Contract:", BCC_CONTRACT);

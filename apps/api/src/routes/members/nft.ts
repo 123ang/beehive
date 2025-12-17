@@ -309,10 +309,21 @@ memberNftRouter.post(
         notes: `Purchased ${quantity}x ${collection.name} NFT(s) on-chain`,
       });
 
+      // Get member to pass memberId
+      const member = await db.query.members.findFirst({
+        where: eq(members.walletAddress, normalizedWallet),
+        columns: { id: true },
+      });
+
+      if (!member) {
+        console.warn(`⚠️ Member not found for wallet ${normalizedWallet} when recording NFT purchase`);
+      }
+
       // Log member activity
       const { logMemberActivity } = await import("../../utils/memberActivityLogger");
       await logMemberActivity({
         walletAddress: normalizedWallet,
+        memberId: member?.id, // Pass memberId if found (will fallback to lookup if undefined)
         activityType: "purchase_nft",
         metadata: {
           collectionId: collection.id,

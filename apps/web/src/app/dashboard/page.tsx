@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useAccount } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
@@ -40,6 +41,7 @@ interface DashboardData {
 
 export default function DashboardPage() {
   const { isConnected, address } = useAccount();
+  const router = useRouter();
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
@@ -53,12 +55,35 @@ export default function DashboardPage() {
   }, [isConnected, address]);
 
   const fetchDashboard = async () => {
-    setLoading(true);
-    const result = await api.getDashboard();
-    if (result.success && result.data) {
-      setDashboard(result.data);
+    if (!address) {
+      setLoading(false);
+      return;
     }
-    setLoading(false);
+    
+    setLoading(true);
+    try {
+      const result = await api.getDashboard(address);
+      if (result.success && result.data) {
+        setDashboard(result.data);
+        
+        // If user is not a member, redirect to registration page
+        if (!result.data.isMember) {
+          console.log("⚠️ User is not a member, redirecting to registration...");
+          router.push("/register");
+          return;
+        }
+      } else {
+        console.error("❌ Failed to fetch dashboard:", result.error);
+        // If API call fails, redirect to register as well
+        router.push("/register");
+      }
+    } catch (error) {
+      console.error("❌ Dashboard fetch error:", error);
+      // On error, redirect to register
+      router.push("/register");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCopyReferral = async () => {
@@ -149,27 +174,6 @@ export default function DashboardPage() {
                 </div>
               ))}
             </div>
-          ) : !dashboard?.isMember ? (
-            // Not a member state
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-glass rounded-2xl p-8 text-center"
-            >
-              <div className="w-16 h-16 rounded-full bg-honey-500/20 flex items-center justify-center mx-auto mb-4">
-                <Crown className="w-8 h-8 text-honey-400" />
-              </div>
-              <h2 className="text-2xl font-bold text-white mb-2">
-                Become a Member
-              </h2>
-              <p className="text-gray-400 mb-6 max-w-md mx-auto">
-                You haven't purchased a membership yet. Start your journey by
-                purchasing Level 1.
-              </p>
-              <Button onClick={() => (window.location.href = "/membership")}>
-                View Membership Levels
-              </Button>
-            </motion.div>
           ) : (
             <>
               {/* Stats Grid */}
@@ -188,10 +192,10 @@ export default function DashboardPage() {
                     <span className="text-gray-400 text-sm">Current Level</span>
                   </div>
                   <div className="text-3xl font-bold text-white">
-                    Level {dashboard.currentLevel}
+                    Level {dashboard?.currentLevel ?? 0}
                   </div>
                   <div className="text-honey-400 text-sm mt-1">
-                    {dashboard.levelName}
+                    {dashboard?.levelName ?? ""}
                   </div>
                 </motion.div>
 
@@ -209,7 +213,7 @@ export default function DashboardPage() {
                     <span className="text-gray-400 text-sm">Total Earnings</span>
                   </div>
                   <div className="text-3xl font-bold text-white">
-                    ${formatNumber(dashboard.totalEarningsUSDT)}
+                    ${formatNumber(dashboard?.totalEarningsUSDT ?? 0)}
                   </div>
                   <div className="text-green-400 text-sm mt-1">USDT</div>
                 </motion.div>
@@ -228,7 +232,7 @@ export default function DashboardPage() {
                     <span className="text-gray-400 text-sm">BCC Tokens</span>
                   </div>
                   <div className="text-3xl font-bold text-white">
-                    {formatNumber(dashboard.totalEarningsBCC, 0)}
+                    {formatNumber(dashboard?.totalEarningsBCC ?? 0, 0)}
                   </div>
                   <div className="text-purple-400 text-sm mt-1">BCC</div>
                 </motion.div>
@@ -247,10 +251,10 @@ export default function DashboardPage() {
                     <span className="text-gray-400 text-sm">Team Size</span>
                   </div>
                   <div className="text-3xl font-bold text-white">
-                    {dashboard.teamSize}
+                    {dashboard?.teamSize ?? 0}
                   </div>
                   <div className="text-blue-400 text-sm mt-1">
-                    {dashboard.directReferrals} direct
+                    {dashboard?.directReferrals ?? 0} direct
                   </div>
                 </motion.div>
               </div>
@@ -272,10 +276,13 @@ export default function DashboardPage() {
                       <div>
                         <div className="text-gray-400 text-sm">USDT</div>
                         <div className="text-xl font-bold text-white">
-                          ${formatNumber(dashboard.pendingRewardsUSDT)}
+                          ${formatNumber(dashboard?.pendingRewardsUSDT ?? 0)}
                         </div>
                       </div>
-                      <Button size="sm" disabled={parseFloat(dashboard.pendingRewardsUSDT) === 0}>
+                      <Button
+                        size="sm"
+                        disabled={parseFloat(dashboard?.pendingRewardsUSDT ?? "0") === 0}
+                      >
                         Claim
                       </Button>
                     </div>
@@ -283,10 +290,13 @@ export default function DashboardPage() {
                       <div>
                         <div className="text-gray-400 text-sm">BCC</div>
                         <div className="text-xl font-bold text-white">
-                          {formatNumber(dashboard.pendingRewardsBCC, 0)}
+                          {formatNumber(dashboard?.pendingRewardsBCC ?? 0, 0)}
                         </div>
                       </div>
-                      <Button size="sm" disabled={parseFloat(dashboard.pendingRewardsBCC) === 0}>
+                      <Button
+                        size="sm"
+                        disabled={parseFloat(dashboard?.pendingRewardsBCC ?? "0") === 0}
+                      >
                         Claim
                       </Button>
                     </div>

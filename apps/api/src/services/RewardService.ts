@@ -9,78 +9,138 @@ import { LAYER_REWARD_AMOUNTS, PENDING_REWARD_EXPIRY_MS } from "@beehive/shared"
 export class RewardService {
   /**
    * Process direct sponsor reward when a new member joins
+   * RULE: 
+   * - First 2 direct referrals: Instant reward (100 USDT)
+   * - 3rd+ direct referral: Pending reward (until referral purchases Level 2)
    */
   async processDirectSponsorReward(
     sponsorWallet: string,
-    newMemberWallet: string
+    newMemberWallet: string,
+    newMemberLevel: number = 1
   ): Promise<void> {
+    console.log(`\n🎁 ============================================`);
+    console.log(`🎁 PROCESSING DIRECT SPONSOR REWARD`);
+    console.log(`🎁 ============================================`);
+    console.log(`🎁 Sponsor: ${sponsorWallet}`);
+    console.log(`🎁 New Member: ${newMemberWallet}`);
+    console.log(`🎁 New Member Level: ${newMemberLevel}`);
+    
+    // Normalize wallet addresses
+    const normalizedSponsorWallet = sponsorWallet.toLowerCase();
+    const normalizedNewMemberWallet = newMemberWallet.toLowerCase();
+    
     const sponsor = await db.query.members.findFirst({
-      where: eq(members.walletAddress, sponsorWallet),
+      where: eq(members.walletAddress, normalizedSponsorWallet),
     });
 
     if (!sponsor) {
-      console.log(`Sponsor not found: ${sponsorWallet}`);
+      console.error(`❌ Sponsor not found: ${normalizedSponsorWallet}`);
       return;
     }
 
     const directSponsorReward = 100; // 100 USDT
 
-    // Get actual direct referrals count for business logic
+    // Get the new member to check their level
+    const newMember = await db.query.members.findFirst({
+      where: eq(members.walletAddress, normalizedNewMemberWallet),
+    });
+
+    if (!newMember) {
+      console.error(`❌ New member not found: ${normalizedNewMemberWallet}`);
+      return;
+    }
+
+    // Count existing direct referrals (includes the current one being added since member is already in DB)
     const directReferralsResult = await db
       .select({ count: sql<number>`COUNT(*)` })
       .from(members)
       .where(eq(members.sponsorId, sponsor.id));
-    const actualDirectReferrals = directReferralsResult[0]?.count || 0;
+    const totalDirectReferralsCount = directReferralsResult[0]?.count || 0;
 
-    // Check sponsor's level to determine reward status
-    if (sponsor.currentLevel === 0) {
-      // Pending - sponsor not activated yet
+    console.log(`🎁 Total Direct Referrals Count: ${totalDirectReferralsCount}`);
+
+    // RULE: First 2 direct referrals get instant reward, 3rd+ get pending (if referral is Level 1)
+    // Since the new member is already in DB, count includes them, so check <= 2 for first 2 referrals
+    const isFirstTwoReferrals = totalDirectReferralsCount <= 2;
+    const isLevel1Referral = newMemberLevel === 1 || newMember.currentLevel === 1;
+
+    console.log(`🎁 Is First Two Referrals: ${isFirstTwoReferrals}`);
+    console.log(`🎁 Is Level 1 Referral: ${isLevel1Referral}`);
+
+    if (isFirstTwoReferrals) {
+      // First 2 referrals: Instant reward
+      console.log(`🎁 Inserting instant reward for ${normalizedSponsorWallet}`);
       await db.insert(rewards).values({
-        recipientWallet: sponsorWallet,
-        sourceWallet: newMemberWallet,
-        rewardType: "direct_sponsor",
-        amount: directSponsorReward.toString(),
-        currency: "USDT",
-        status: "pending",
-        notes: "Pending - sponsor must activate first",
-      });
-    } else if (sponsor.currentLevel === 1 && actualDirectReferrals >= 2) {
-      // Pending - Level 1 members can only receive 2 direct sponsor rewards
-      await db.insert(rewards).values({
-        recipientWallet: sponsorWallet,
-        sourceWallet: newMemberWallet,
-        rewardType: "direct_sponsor",
-        amount: directSponsorReward.toString(),
-        currency: "USDT",
-        status: "pending",
-        notes: "Pending - upgrade to Level 2 required",
-      });
-    } else {
-      // Instant payout
-      await db.insert(rewards).values({
-        recipientWallet: sponsorWallet,
-        sourceWallet: newMemberWallet,
+        recipientWallet: normalizedSponsorWallet,
+        sourceWallet: normalizedNewMemberWallet,
         rewardType: "direct_sponsor",
         amount: directSponsorReward.toString(),
         currency: "USDT",
         status: "instant",
       });
+      console.log(`✅ Reward inserted successfully into database`);
+
+      // Process USDT reward payment from company account (just records transaction, doesn't use blockchain)
+      try {
+        const { processUSDTRewardPayment } = await import("../utils/paymentDistribution");
+        await processUSDTRewardPayment(
+          normalizedSponsorWallet,
+          directSponsorReward,
+          "direct_sponsor",
+          normalizedNewMemberWallet
+        );
+        console.log(`✅ Reward payment transaction recorded`);
+      } catch (error: any) {
+        console.error(`❌ Failed to record reward payment transaction (non-blocking):`, error.message);
+        // Don't throw - reward is already in database
+      }
+
+      console.log(`✅ Direct sponsor reward (100 USDT) INSTANT for ${normalizedSponsorWallet} - referral #${totalDirectReferralsCount}`);
+    } else if (isLevel1Referral) {
+      // 3rd+ referral and referral is Level 1: Pending until referral purchases Level 2
+      console.log(`🎁 Inserting pending reward for ${normalizedSponsorWallet}`);
+      await db.insert(rewards).values({
+        recipientWallet: normalizedSponsorWallet,
+        sourceWallet: normalizedNewMemberWallet,
+        rewardType: "direct_sponsor",
+        amount: directSponsorReward.toString(),
+        currency: "USDT",
+        status: "pending",
+        notes: `Pending - will be released when ${normalizedNewMemberWallet} purchases Level 2`,
+      });
+      console.log(`✅ Pending reward inserted successfully`);
+      
+      console.log(`⏳ Direct sponsor reward (100 USDT) PENDING for ${normalizedSponsorWallet} - referral #${totalDirectReferralsCount} (will release when ${normalizedNewMemberWallet} purchases Level 2)`);
+    } else {
+      // 3rd+ referral but referral is Level 2+: Instant reward
+      console.log(`🎁 Inserting instant reward for ${normalizedSponsorWallet} (referral is Level 2+)`);
+      await db.insert(rewards).values({
+        recipientWallet: normalizedSponsorWallet,
+        sourceWallet: normalizedNewMemberWallet,
+        rewardType: "direct_sponsor",
+        amount: directSponsorReward.toString(),
+        currency: "USDT",
+        status: "instant",
+      });
+      console.log(`✅ Reward inserted successfully`);
 
       // Process USDT reward payment from company account
       const { processUSDTRewardPayment } = await import("../utils/paymentDistribution");
       await processUSDTRewardPayment(
-        sponsorWallet,
+        normalizedSponsorWallet,
         directSponsorReward,
         "direct_sponsor",
-        newMemberWallet
+        normalizedNewMemberWallet
       );
 
-      // Update sponsor's direct referral count
-      await db
-        .update(members)
-        .set({ directSponsorCount: sql`${members.directSponsorCount} + 1` })
-        .where(eq(members.walletAddress, sponsorWallet));
+      console.log(`✅ Direct sponsor reward (100 USDT) INSTANT for ${normalizedSponsorWallet} - referral #${totalDirectReferralsCount} (referral is Level 2+)`);
     }
+
+    // Update sponsor's direct referral count
+    await db
+      .update(members)
+      .set({ directSponsorCount: sql`${members.directSponsorCount} + 1` })
+      .where(eq(members.walletAddress, sponsorWallet));
   }
 
   /**
@@ -220,7 +280,18 @@ export class RewardService {
    */
   async releasePendingRewards(wallet: string, newLevel: number): Promise<number> {
     // Release layer payout rewards for levels <= newLevel
-    const layerResult = await db
+    // First, get the rewards that will be updated
+    const rewardsToRelease = await db.query.rewards.findMany({
+      where: and(
+        eq(rewards.recipientWallet, wallet),
+        eq(rewards.status, "pending"),
+        eq(rewards.rewardType, "layer_payout"),
+        lte(rewards.layerNumber, newLevel)
+      ),
+    });
+
+    // Update the rewards
+    await db
       .update(rewards)
       .set({
         status: "instant",
@@ -234,12 +305,11 @@ export class RewardService {
           eq(rewards.rewardType, "layer_payout"),
           lte(rewards.layerNumber, newLevel)
         )
-      )
-      .returning({ id: rewards.id, amount: rewards.amount, currency: rewards.currency, sourceWallet: rewards.sourceWallet, layerNumber: rewards.layerNumber });
+      );
 
     // Process USDT payments for released layer rewards
     const { processUSDTRewardPayment } = await import("../utils/paymentDistribution");
-    for (const reward of layerResult) {
+    for (const reward of rewardsToRelease) {
       if (reward.amount && reward.currency === "USDT") {
         await processUSDTRewardPayment(
           wallet,
@@ -250,38 +320,51 @@ export class RewardService {
       }
     }
 
-    let releasedCount = layerResult.length;
+    let releasedCount = rewardsToRelease.length;
 
-    // Release direct sponsor rewards if upgrading to Level 2+
-    if (newLevel >= 2) {
-      const directResult = await db
+    // Release direct sponsor rewards when member upgrades to Level 2
+    // These are rewards where THIS member (wallet) is the sourceWallet (they triggered the reward)
+    // The recipient is their sponsor, who will now receive the reward
+    if (newLevel === 2) {
+      // First, get the rewards that will be updated
+      const directRewardsToRelease = await db.query.rewards.findMany({
+        where: and(
+          eq(rewards.sourceWallet, wallet), // This member triggered the reward
+          eq(rewards.status, "pending"),
+          eq(rewards.rewardType, "direct_sponsor")
+        ),
+      });
+
+      // Update the rewards
+      await db
         .update(rewards)
         .set({
           status: "instant",
           pendingExpiresAt: null,
+          notes: sql`CONCAT(COALESCE(${rewards.notes}, ''), ' (released after member upgraded to Level 2)')`,
         })
         .where(
           and(
-            eq(rewards.recipientWallet, wallet),
+            eq(rewards.sourceWallet, wallet), // This member triggered the reward
             eq(rewards.status, "pending"),
             eq(rewards.rewardType, "direct_sponsor")
           )
-        )
-        .returning({ id: rewards.id, amount: rewards.amount, currency: rewards.currency, sourceWallet: rewards.sourceWallet });
+        );
 
       // Process USDT payments for released direct sponsor rewards
-      for (const reward of directResult) {
-        if (reward.amount && reward.currency === "USDT") {
+      // The recipient is the sponsor who gets the reward
+      for (const reward of directRewardsToRelease) {
+        if (reward.amount && reward.currency === "USDT" && reward.recipientWallet) {
           await processUSDTRewardPayment(
-            wallet,
+            reward.recipientWallet,
             parseFloat(reward.amount),
             "direct_sponsor",
-            reward.sourceWallet || undefined
+            wallet // sourceWallet is the member who just upgraded
           );
         }
       }
 
-      releasedCount += directResult.length;
+      releasedCount += directRewardsToRelease.length;
     }
 
     return releasedCount;
@@ -292,10 +375,13 @@ export class RewardService {
    */
   async getRewardSummary(wallet: string) {
     try {
+      // Normalize wallet address to lowercase for consistent querying
+      const normalizedWallet = wallet.toLowerCase();
+      
       const allRewards = await db
         .select()
         .from(rewards)
-        .where(eq(rewards.recipientWallet, wallet));
+        .where(eq(rewards.recipientWallet, normalizedWallet));
 
       const summary = {
         totalDirectSponsor: "0",
@@ -369,7 +455,16 @@ export class RewardService {
   async processExpiredRewards(): Promise<number> {
     const now = new Date();
     
-    const expired = await db
+    // First, get the expired rewards
+    const expiredRewards = await db.query.rewards.findMany({
+      where: and(
+        eq(rewards.status, "pending"),
+        lte(rewards.pendingExpiresAt, now)
+      ),
+    });
+
+    // Update the expired rewards
+    await db
       .update(rewards)
       .set({
         status: "expired",
@@ -380,10 +475,9 @@ export class RewardService {
           eq(rewards.status, "pending"),
           lte(rewards.pendingExpiresAt, now)
         )
-      )
-      .returning({ id: rewards.id });
+      );
 
-    return expired.length;
+    return expiredRewards.length;
   }
 }
 

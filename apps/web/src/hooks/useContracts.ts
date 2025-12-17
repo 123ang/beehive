@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useAccount, useChainId, useReadContract, useWriteContract, useWaitForTransactionReceipt, useBalance } from "wagmi";
 import { parseUnits, formatUnits } from "viem";
 import { CONTRACTS, MEMBERSHIP_ABI, REWARDS_ABI, ERC20_ABI, NFT_MARKETPLACE_ABI } from "@/lib/contracts";
 import { MEMBERSHIP_LEVELS } from "@beehive/shared";
+import { api } from "@/lib/api";
 
 // ============================================
 // READ HOOKS
@@ -467,6 +469,7 @@ export function useTransferUSDT() {
  */
 export function usePurchaseMembership() {
   const { address } = useAccount();
+  const router = useRouter();
   const { balance, balanceRaw, refetch: refetchBalance } = useUSDTBalance();
   const { transfer, hash, isPending: isTransferring, isConfirming: isTransferConfirming, isSuccess: isTransferSuccess, error: transferError } = useTransferUSDT();
   
@@ -475,31 +478,19 @@ export function usePurchaseMembership() {
     level: number | null;
     referrer: string | null;
     companyHash: string | null;
-    itHash: string | null;
     companyConfirmed: boolean;
-    itConfirmed: boolean;
   }>({
     level: null,
     referrer: null,
     companyHash: null,
-    itHash: null,
     companyConfirmed: false,
-    itConfirmed: false,
   });
   
   const [isRegistering, setIsRegistering] = useState(false);
   const [registrationError, setRegistrationError] = useState<string | null>(null);
   const [isPurchaseInProgress, setIsPurchaseInProgress] = useState(false);
 
-  // Separate hooks for IT transfer (Level 1 only)
-  const { 
-    transfer: transferIT, 
-    hash: itHash, 
-    isPending: isITTransferring, 
-    isConfirming: isITConfirming, 
-    isSuccess: isITTransferSuccess, 
-    error: itTransferError,
-  } = useTransferUSDT();
+  // IT transfer is now handled automatically by backend - no need for separate hook
 
   const purchaseWithApproval = async (level: number, referrer: string) => {
     const levelInfo = MEMBERSHIP_LEVELS.find((l) => l.level === level);
@@ -510,17 +501,17 @@ export function usePurchaseMembership() {
       throw new Error(`Insufficient TUSDT balance. You need ${levelInfo.priceUSDT} USDT but only have ${parseFloat(balance).toFixed(2)} USDT.`);
     }
 
-    const isLevel1 = level === 1;
-    const companyAmount = isLevel1 ? 100 : levelInfo.priceUSDT;
+    // User sends full amount to company wallet
+    // For Level 1: 130 USDT (backend will automatically split: 100 stays, 30 goes to IT)
+    // For upgrades: full amount stays with company
+    const companyAmount = levelInfo.priceUSDT;
 
     // Reset state
     setPurchaseState({
       level,
       referrer,
       companyHash: null,
-      itHash: null,
       companyConfirmed: false,
-      itConfirmed: false,
     });
     setRegistrationError(null);
     setIsPurchaseInProgress(true);
@@ -528,18 +519,16 @@ export function usePurchaseMembership() {
     try {
       console.log("Starting purchase flow...", { level, companyAmount, to: CONTRACTS.COMPANY_ACCOUNT });
       
-      // Transfer to company account - this now properly awaits and returns the hash
+      // Transfer full amount to company account
+      // Backend will automatically split Level 1 payments (30 USDT to IT)
       const companyTxHash = await transfer(CONTRACTS.COMPANY_ACCOUNT, companyAmount.toString());
       
       if (!companyTxHash) {
         throw new Error("No transaction hash received. Transaction may have been rejected.");
       }
       
-      console.log("Company transfer submitted:", companyTxHash);
+      console.log("Purchase transfer submitted:", companyTxHash);
       setPurchaseState(prev => ({ ...prev, companyHash: companyTxHash }));
-      
-      // For Level 1, we need to also transfer to IT account
-      // This will be handled in useEffect after company transfer is confirmed
       
       return { step: "purchase", hash: companyTxHash, message: "Transaction submitted, waiting for confirmation..." };
     } catch (err: any) {
@@ -576,72 +565,38 @@ export function usePurchaseMembership() {
     }
   }, [transferError, purchaseState.level, purchaseState.companyHash]);
 
-  // Track IT transfer hash
-  useEffect(() => {
-    if (itHash && purchaseState.level === 1) {
-      setPurchaseState(prev => ({ ...prev, itHash: itHash }));
-    }
-  }, [itHash, purchaseState.level]);
-
-  // Track company transfer confirmation and trigger IT transfer for Level 1
+  // Track company transfer confirmation
   useEffect(() => {
     if (isTransferSuccess && purchaseState.level && hash && !purchaseState.companyConfirmed) {
-      console.log("Company transfer confirmed:", hash);
+      console.log("Purchase transfer confirmed:", hash);
       setPurchaseState(prev => ({ ...prev, companyConfirmed: true }));
-      
-      // For Level 1, transfer to IT account after company transfer is confirmed
-      if (purchaseState.level === 1) {
-        console.log("Level 1 detected, initiating IT transfer...");
-        const transferITAfterCompany = async () => {
-          try {
-            await new Promise(resolve => setTimeout(resolve, 1000)); // Small delay
-            console.log("Transferring 30 USDT to IT account...");
-            await transferIT(CONTRACTS.IT_ACCOUNT, "30");
-          } catch (err) {
-            console.error("Failed to transfer to IT account:", err);
-          }
-        };
-        transferITAfterCompany();
-      }
+      // Backend will automatically split Level 1 payments (30 USDT to IT)
     }
-  }, [isTransferSuccess, purchaseState.level, purchaseState.companyConfirmed, hash, transferIT]);
+  }, [isTransferSuccess, purchaseState.level, purchaseState.companyConfirmed, hash]);
 
-  // Track IT transfer confirmation
-  useEffect(() => {
-    if (isITTransferSuccess && purchaseState.level === 1 && !purchaseState.itConfirmed) {
-      setPurchaseState(prev => ({ ...prev, itConfirmed: true }));
-    }
-  }, [isITTransferSuccess, purchaseState.level, purchaseState.itConfirmed]);
-
-  // Register with backend after both transfers are confirmed
+  // Register with backend after transfer is confirmed
   useEffect(() => {
     const registerAfterPurchase = async () => {
       if (!purchaseState.level || !address || isRegistering) return;
 
-      const isLevel1 = purchaseState.level === 1;
-      const bothTransfersConfirmed = isLevel1 
-        ? purchaseState.companyConfirmed && purchaseState.itConfirmed
-        : purchaseState.companyConfirmed;
-
-      if (bothTransfersConfirmed && purchaseState.companyHash) {
-        console.log("All transfers confirmed, registering with backend...", {
+      // Only need company transfer confirmed (backend handles IT split automatically)
+      if (purchaseState.companyConfirmed && purchaseState.companyHash) {
+        console.log("Purchase transfer confirmed, registering with backend...", {
           level: purchaseState.level,
           companyHash: purchaseState.companyHash,
-          itHash: purchaseState.itHash,
         });
         
         setIsRegistering(true);
         setRegistrationError(null);
         
         try {
-          const { api } = await import("@/lib/api");
-          
-          // Check if member already exists
-          const dashboardData = await api.getDashboard(address);
-          const isExistingMember = dashboardData.success && dashboardData.data?.currentLevel > 0;
+          // Check if member already exists (regardless of level)
+          // Use a public endpoint that doesn't require authentication
+          const checkMemberResult = await api.checkMember(address);
+          const isExistingMember = checkMemberResult.success && checkMemberResult.data?.exists;
           
           if (isExistingMember) {
-            // Member exists - upgrade membership
+            // Member exists - upgrade membership (no auth needed, verified by tx)
             console.log("Member exists, calling api.upgradeMembership...");
             const result = await api.upgradeMembership(
               purchaseState.companyHash,
@@ -655,12 +610,13 @@ export function usePurchaseMembership() {
 
             console.log("Upgrade successful!", result.data);
           } else {
-            // New member - register
+            // New member - register (no auth needed, verified by tx)
             console.log("New member, calling api.registerMember...");
             const result = await api.registerMember(
               purchaseState.companyHash,
               purchaseState.level,
-              purchaseState.referrer || "0x0000000000000000000000000000000000000000"
+              purchaseState.referrer || "0x0000000000000000000000000000000000000000",
+              address
             );
 
             if (!result.success) {
@@ -672,6 +628,10 @@ export function usePurchaseMembership() {
           
           // Refetch balance after successful registration/upgrade
           refetchBalance();
+          
+          // Redirect to dashboard after successful purchase/upgrade
+          console.log("Redirecting to dashboard...");
+          router.push("/user/dashboard");
         } catch (err: any) {
           console.error("Failed to register/upgrade after purchase:", err);
           setRegistrationError(err.message || "Registration/upgrade failed");
@@ -684,7 +644,6 @@ export function usePurchaseMembership() {
     registerAfterPurchase();
   }, [
     purchaseState.companyConfirmed, 
-    purchaseState.itConfirmed, 
     purchaseState.level, 
     purchaseState.companyHash,
     purchaseState.referrer,
@@ -694,19 +653,12 @@ export function usePurchaseMembership() {
   ]);
 
   // Determine overall purchase state
-  const isLevel1 = purchaseState.level === 1;
-  const allTransfersPending = isLevel1 
-    ? (isTransferring || isITTransferring)
-    : isTransferring;
-  const allTransfersConfirming = isLevel1
-    ? (isTransferConfirming || isITConfirming)
-    : isTransferConfirming;
-  const allTransfersSuccess = isLevel1
-    ? (purchaseState.companyConfirmed && purchaseState.itConfirmed)
-    : purchaseState.companyConfirmed;
+  const allTransfersPending = isTransferring;
+  const allTransfersConfirming = isTransferConfirming;
+  const allTransfersSuccess = purchaseState.companyConfirmed;
 
   // Combine errors and convert to string if needed
-  const combinedError = transferError || itTransferError || registrationError;
+  const combinedError = transferError || registrationError;
   const errorMessage = combinedError 
     ? (combinedError instanceof Error 
         ? combinedError.message 
@@ -720,30 +672,20 @@ export function usePurchaseMembership() {
     if (purchaseState.level) {
       console.log("Purchase State:", {
         level: purchaseState.level,
-        isLevel1,
         companyHash: purchaseState.companyHash,
-        itHash: purchaseState.itHash,
         companyConfirmed: purchaseState.companyConfirmed,
-        itConfirmed: purchaseState.itConfirmed,
         isTransferring,
-        isITTransferring,
         isTransferConfirming,
-        isITConfirming,
         isTransferSuccess,
-        isITTransferSuccess,
         isRegistering,
         allTransfersSuccess,
       });
     }
   }, [
     purchaseState,
-    isLevel1,
     isTransferring,
-    isITTransferring,
     isTransferConfirming,
-    isITConfirming,
     isTransferSuccess,
-    isITTransferSuccess,
     isRegistering,
     allTransfersSuccess,
   ]);
@@ -760,9 +702,10 @@ export function usePurchaseMembership() {
     isApproving: false,
     isApproveConfirming: false,
     isApproveSuccess: false,
-    isPurchasing: isPurchaseInProgress || allTransfersPending || isRegistering,
-    isPurchaseConfirming: allTransfersConfirming || isRegistering,
+    isPurchasing: isPurchaseInProgress || allTransfersPending,
+    isPurchaseConfirming: allTransfersConfirming,
     isPurchaseSuccess: allTransfersSuccess && !isRegistering && !registrationError,
+    isRegistering: isRegistering, // Expose registration state
     hash: purchaseState.companyHash || hash, // Use company hash for display
     refetchAllowance: refetchBalance,
     error: errorMessage,

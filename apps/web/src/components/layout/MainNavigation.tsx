@@ -10,7 +10,8 @@ const navItems = [
     id: "home", 
     labelKey: "nav.main.home", 
     icon: Home, 
-    href: "/" 
+    // When connected, Home should point to user dashboard instead of landing page
+    href: "/user/dashboard", 
   },
   { 
     id: "nfts", 

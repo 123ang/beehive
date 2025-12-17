@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useAccount } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
@@ -40,6 +41,7 @@ interface DashboardData {
   totalEarningsBCC: string;
   pendingRewardsUSDT: string;
   pendingRewardsBCC: string;
+  bccBalance?: string; // Available/transferable BCC balance
   directReferrals: number;
   teamSize: number;
   username?: string;
@@ -49,10 +51,12 @@ interface DashboardData {
 
 export default function UserDashboardPage() {
   const { isConnected, address } = useAccount();
+  const router = useRouter();
   const { t } = useTranslation();
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [showMatrix, setShowMatrix] = useState(false);
 
@@ -79,11 +83,22 @@ export default function UserDashboardPage() {
         setDashboard(result.data);
         setLastUpdate(new Date());
         console.log("✅ Dashboard data loaded:", result.data);
+        
+        // If user is not a member, redirect to registration page
+        if (!result.data.isMember) {
+          console.log("⚠️ User is not a member, redirecting to registration...");
+          router.push("/register");
+          return;
+        }
       } else {
         console.error("❌ Failed to fetch dashboard:", result.error);
+        // If API call fails, redirect to register as well
+        router.push("/register");
       }
     } catch (error) {
       console.error("❌ Dashboard fetch error:", error);
+      // On error, redirect to register
+      router.push("/register");
     } finally {
       setLoading(false);
     }
@@ -97,6 +112,16 @@ export default function UserDashboardPage() {
     if (success) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const handleCopyReferralCode = async () => {
+    const code = dashboard?.referralCode;
+    if (!code) return;
+    const success = await copyToClipboard(code);
+    if (success) {
+      setCopiedCode(true);
+      setTimeout(() => setCopiedCode(false), 2000);
     }
   };
 
@@ -143,11 +168,16 @@ export default function UserDashboardPage() {
     });
   };
 
-  // Calculate BCC balances (using earnings as transferable, pending as locked for now)
-  const transferableBCC = dashboard?.totalEarningsBCC ? parseFloat(dashboard.totalEarningsBCC) : 0;
+  // Calculate BCC balances
+  // bccBalance is the available/transferable BCC (after withdrawals)
+  // totalEarningsBCC is the total BCC earned (before withdrawals)
+  const transferableBCC = dashboard?.bccBalance ? parseFloat(dashboard.bccBalance) : (dashboard?.totalEarningsBCC ? parseFloat(dashboard.totalEarningsBCC) : 0);
   const lockedBCC = dashboard?.pendingRewardsBCC ? parseFloat(dashboard.pendingRewardsBCC) : 0;
+  const totalBCCEarned = dashboard?.totalEarningsBCC ? parseFloat(dashboard.totalEarningsBCC) : 0;
+  
   const totalRewards = dashboard?.totalEarningsUSDT ? parseFloat(dashboard.totalEarningsUSDT) : 0;
   const claimableRewards = dashboard?.pendingRewardsUSDT ? parseFloat(dashboard.pendingRewardsUSDT) : 0;
+  const claimableBCC = transferableBCC; // Available BCC that can be withdrawn
   
   // Calculate max level (for now, use a placeholder - can be enhanced with API)
   const maxLevel = dashboard?.teamSize ? Math.min(12, Math.floor(Math.log2(dashboard.teamSize + 1)) + 1) : 0;
@@ -221,23 +251,6 @@ export default function UserDashboardPage() {
                 </div>
               ))}
             </div>
-          ) : !dashboard?.isMember ? (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-gray-800/50 rounded-2xl p-8 text-center"
-            >
-              <div className="w-16 h-16 rounded-full bg-honey-500/20 flex items-center justify-center mx-auto mb-4">
-                <Crown className="w-8 h-8 text-honey-400" />
-              </div>
-              <h2 className="text-2xl font-bold text-white mb-2">{t("dashboard.becomeMember")}</h2>
-              <p className="text-gray-400 mb-6 max-w-md mx-auto">
-                {t("dashboard.becomeMemberDesc")}
-              </p>
-              <Button onClick={() => (window.location.href = "/membership")}>
-                {t("dashboard.viewLevels")}
-              </Button>
-            </motion.div>
           ) : (
             <>
               {/* Three Main Cards */}
@@ -257,7 +270,9 @@ export default function UserDashboardPage() {
                   </div>
                   <p className="text-gray-400 text-sm mb-2">{t("dashboard.yourNFT")}</p>
                   <div className="flex items-baseline gap-2 mb-2">
-                    <span className="text-4xl font-bold text-purple-400">Level {dashboard.currentLevel}</span>
+                    <span className="text-4xl font-bold text-purple-400">
+                      Level {dashboard?.currentLevel ?? 0}
+                    </span>
                     <span className="px-2 py-1 bg-purple-500/20 text-purple-300 text-xs rounded">NFT</span>
                   </div>
                   <p className="text-gray-400 text-sm mb-4">{t("dashboard.currentLevel")}</p>
@@ -326,11 +341,15 @@ export default function UserDashboardPage() {
                   <p className="text-gray-400 text-sm mb-4">{t("dashboard.yourTeam")}</p>
                   <div className="mb-4">
                     <div className="flex items-baseline gap-2 mb-1">
-                      <span className="text-4xl font-bold text-blue-400">{dashboard.directReferrals}</span>
+                      <span className="text-4xl font-bold text-blue-400">
+                        {dashboard?.directReferrals ?? 0}
+                      </span>
                     </div>
                     <p className="text-gray-400 text-sm mb-4">{t("dashboard.directReferrals")}</p>
                     <div className="flex items-baseline gap-2 mb-1">
-                      <span className="text-4xl font-bold text-blue-400">{dashboard.teamSize}</span>
+                      <span className="text-4xl font-bold text-blue-400">
+                        {dashboard?.teamSize ?? 0}
+                      </span>
                     </div>
                     <p className="text-gray-400 text-sm mb-4">{t("dashboard.totalTeamSize")}</p>
                     <div className="flex items-center gap-2">
@@ -362,17 +381,37 @@ export default function UserDashboardPage() {
                   </div>
                   <p className="text-gray-400 text-sm mb-6">{t("dashboard.yourEarnings")}</p>
                   
+                  {/* Total Rewards - USDT and BCC */}
                   <div className="bg-gray-900/50 rounded-lg p-4 mb-4">
-                    <p className="text-gray-400 text-sm mb-1">{t("dashboard.totalRewards")}</p>
-                    <p className="text-3xl font-bold text-green-400">${formatNumber(totalRewards, 2)}</p>
+                    <p className="text-gray-400 text-sm mb-3">{t("dashboard.totalRewards")}</p>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-300 text-sm">USDT</span>
+                        <p className="text-2xl font-bold text-green-400">${formatNumber(totalRewards, 2)}</p>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-300 text-sm">BCC</span>
+                        <p className="text-2xl font-bold text-yellow-400">${formatNumber(totalBCCEarned + lockedBCC, 2)}</p>
+                      </div>
+                    </div>
                   </div>
                   
+                  {/* Claimable Rewards */}
                   <div className="bg-gray-900/50 rounded-lg p-4 mb-6">
-                    <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center justify-between mb-3">
                       <p className="text-gray-400 text-sm">{t("dashboard.claimableRewards")}</p>
                       <span className="px-2 py-1 bg-yellow-500/20 text-yellow-300 text-xs rounded">{t("dashboard.ready")}</span>
                     </div>
-                    <p className="text-3xl font-bold text-yellow-400">${formatNumber(claimableRewards, 2)}</p>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-300 text-sm">USDT</span>
+                        <p className="text-2xl font-bold text-yellow-400">${formatNumber(claimableRewards, 2)}</p>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-300 text-sm">BCC</span>
+                        <p className="text-2xl font-bold text-yellow-400">${formatNumber(claimableBCC, 2)}</p>
+                      </div>
+                    </div>
                   </div>
                   
                   <Button
@@ -414,23 +453,54 @@ export default function UserDashboardPage() {
                     {t("dashboard.shareDesc")}
                   </p>
                   
-                  <div className="flex gap-2 mb-4">
-                    <input
-                      type="text"
-                    value={dashboard?.referralLink || (dashboard?.referralCode ? generateReferralLink(dashboard.referralCode) : "")}
-                      readOnly
-                      className="flex-1 bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-sm text-gray-300 focus:outline-none focus:border-yellow-500"
-                    />
-                    <Button
-                      onClick={handleCopyReferral}
-                      className="bg-yellow-600 hover:bg-yellow-700 text-white"
-                    >
-                      {copied ? (
-                        <Check className="w-4 h-4" />
-                      ) : (
-                        <Copy className="w-4 h-4" />
-                      )}
-                    </Button>
+                  {/* Referral Code Only */}
+                  <div className="mb-4">
+                    <label className="block text-gray-400 text-sm mb-2">
+                      {t("dashboard.referralCode") || "Referral Code"}
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={dashboard?.referralCode || ""}
+                        readOnly
+                        className="flex-1 bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-sm text-gray-300 focus:outline-none focus:border-yellow-500 font-mono"
+                      />
+                      <Button
+                        onClick={handleCopyReferralCode}
+                        className="bg-yellow-600 hover:bg-yellow-700 text-white"
+                      >
+                        {copiedCode ? (
+                          <Check className="w-4 h-4" />
+                        ) : (
+                          <Copy className="w-4 h-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {/* Referral Link */}
+                  <div className="mb-4">
+                    <label className="block text-gray-400 text-sm mb-2">
+                      {t("dashboard.referralLink") || "Referral Link"}
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={dashboard?.referralLink || (dashboard?.referralCode ? generateReferralLink(dashboard.referralCode) : "")}
+                        readOnly
+                        className="flex-1 bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-sm text-gray-300 focus:outline-none focus:border-yellow-500"
+                      />
+                      <Button
+                        onClick={handleCopyReferral}
+                        className="bg-yellow-600 hover:bg-yellow-700 text-white"
+                      >
+                        {copied ? (
+                          <Check className="w-4 h-4" />
+                        ) : (
+                          <Copy className="w-4 h-4" />
+                        )}
+                      </Button>
+                    </div>
                   </div>
                   
                   <p className="text-gray-400 text-sm mb-3">{t("dashboard.shareTo")}</p>

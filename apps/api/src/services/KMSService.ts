@@ -4,7 +4,7 @@
 // ============================================
 
 import { KeyManagementServiceClient } from "@google-cloud/kms";
-import { readFileSync } from "fs";
+import { readFileSync, existsSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 
@@ -30,9 +30,13 @@ export class KMSService {
 
     try {
       // Get service account key file path
+      // Default to project root/kms-service-account.json
+      // From apps/api/src/services, go up 4 levels to project root
+      // Works in both dev (src/) and production (dist/)
+      const defaultServiceAccountPath = resolve(__dirname, "../../../../kms-service-account.json");
       const serviceAccountPath = getEnvVar(
         "GOOGLE_APPLICATION_CREDENTIALS",
-        resolve(__dirname, "../../../kms-service-account.json")
+        defaultServiceAccountPath
       );
 
       console.log("🔍 KMSService initializing...");
@@ -79,12 +83,36 @@ export class KMSService {
       console.log("   Key Name:", keyName);
 
       // Get encrypted key file path
-      const encryptedKeyPath = getEnvVar(
-        "GOOGLE_KMS_ENCRYPTED_KEY_PATH",
-        resolve(__dirname, "../../../secrets/encrypted-key.enc")
-      );
+      // Calculate project root: from apps/api/src/services or apps/api/dist/services
+      // Structure: root -> apps -> api -> src/dist -> services
+      // So we need to go up 4 levels to get to root
+      const projectRoot = resolve(__dirname, "../../../../");
+      const defaultEncryptedKeyPath = resolve(projectRoot, "secrets/encrypted-key.enc");
+      
+      // Check if env var is set (might be pointing to wrong location)
+      const envPath = getEnvVar("GOOGLE_KMS_ENCRYPTED_KEY_PATH", "");
+      
+      // If env var is set but relative, resolve it from project root
+      // If env var is absolute, use it as-is
+      let encryptedKeyPath: string;
+      if (envPath) {
+        if (envPath.startsWith("/") || /^[A-Z]:/.test(envPath)) {
+          // Absolute path
+          encryptedKeyPath = envPath;
+        } else {
+          // Relative path - resolve from project root
+          encryptedKeyPath = resolve(projectRoot, envPath);
+        }
+      } else {
+        encryptedKeyPath = defaultEncryptedKeyPath;
+      }
 
-      console.log("🔍 Encrypted key path:", encryptedKeyPath);
+      console.log("🔍 __dirname:", __dirname);
+      console.log("🔍 Project root (calculated):", projectRoot);
+      console.log("🔍 process.cwd():", process.cwd());
+      console.log("🔍 GOOGLE_KMS_ENCRYPTED_KEY_PATH env var:", envPath || "(not set)");
+      console.log("🔍 Encrypted key path (final):", encryptedKeyPath);
+      console.log("🔍 File exists:", existsSync(encryptedKeyPath));
 
       // Read encrypted key file
       const encryptedKey = readFileSync(encryptedKeyPath);
@@ -106,6 +134,9 @@ export class KMSService {
       });
 
       // Convert decrypted data to string
+      if (!decryptResponse.plaintext) {
+        throw new Error("Failed to decrypt private key: plaintext is null");
+      }
       const privateKey = decryptResponse.plaintext.toString("utf-8").trim();
 
       // Add 0x prefix if not present

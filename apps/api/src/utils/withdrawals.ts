@@ -153,6 +153,7 @@ export async function processWithdrawal(
     const { logMemberActivity } = await import("./memberActivityLogger");
     await logMemberActivity({
       walletAddress: normalizedWallet,
+      memberId: member.id, // Pass memberId directly
       activityType: "withdrawal",
       metadata: {
         currency,

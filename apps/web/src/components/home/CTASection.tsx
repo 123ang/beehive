@@ -50,9 +50,9 @@ export function CTASection() {
             ))}
           </div>
 
-          {/* Join Button */}
+          {/* Join Button → Registration */}
           <div className="flex items-center justify-center">
-            <Link href="/membership">
+            <Link href="/register">
               <button className="px-10 py-5 rounded-xl bg-gradient-to-r from-honey-500 to-honey-600 text-black font-bold text-xl hover:scale-105 transition-transform flex items-center gap-2">
                 <span>⚡</span>
                 <span>{t("cta.button.startJourney")}</span>

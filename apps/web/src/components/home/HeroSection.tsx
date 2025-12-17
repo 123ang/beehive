@@ -30,7 +30,8 @@ const featureCards = [
     icon: "💰",
     titleKey: "hero.card.earnPassiveIncome.title",
     descKey: "hero.card.earnPassiveIncome.desc",
-    link: "/membership",
+    // Direct users to registration when exploring earning/passive income
+    link: "/register",
     linkTextKey: "hero.card.viewLevels",
   },
 ];
@@ -106,14 +107,14 @@ export function HeroSection() {
           ))}
         </motion.div>
 
-        {/* Get Started Button */}
+        {/* Get Started Button → Registration */}
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5, delay: 0.2 }}
           className="mb-8"
         >
-          <Link href="/membership">
+          <Link href="/register">
             <button className="group relative px-8 py-4 rounded-2xl bg-gradient-to-r from-honey-500 to-honey-600 text-black font-bold text-xl shadow-lg hover:shadow-honey-500/30 transition-all duration-300 hover:scale-105">
               <span className="flex items-center gap-3">
                 <span>🚀</span>
@@ -154,14 +155,14 @@ export function HeroSection() {
           </div>
         </motion.div>
 
-        {/* Join CTA */}
+        {/* Join CTA → Registration */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.4 }}
           className="mt-8 text-center"
         >
-          <Link href="/membership">
+          <Link href="/register">
             <button className="group px-8 py-4 rounded-xl bg-gradient-to-r from-honey-600 to-amber-500 text-black font-bold text-lg transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-honey-500/30">
               <span className="flex items-center gap-2">
                 <span>⚡</span>

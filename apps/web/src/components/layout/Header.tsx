@@ -25,8 +25,8 @@ export function Header() {
       
       <nav className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 md:h-20">
-          {/* Logo */}
-          <Link href="/" className="flex items-center">
+          {/* Logo - acts as Home (dashboard when connected, landing when not) */}
+          <Link href={isConnected ? "/user/dashboard" : "/"} className="flex items-center">
             <motion.div
               className="relative w-32 h-32 md:w-40 md:h-40"
               whileHover={{ scale: 1.05 }}

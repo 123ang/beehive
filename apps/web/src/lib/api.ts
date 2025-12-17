@@ -174,10 +174,16 @@ class ApiClient {
     return this.request<any>(url);
   }
 
-  async registerMember(txHash: string, level: number, referrerAddress: string) {
+  async checkMember(walletAddress: string) {
+    return this.request<any>(`/api/members/check/${walletAddress}`, {
+      method: "GET",
+    });
+  }
+
+  async registerMember(txHash: string, level: number, referrerAddress: string, walletAddress: string) {
     return this.request<any>("/api/members/register", {
       method: "POST",
-      body: JSON.stringify({ txHash, level, referrerAddress }),
+      body: JSON.stringify({ txHash, level, referrerAddress, walletAddress }),
     });
   }
 

@@ -5,7 +5,7 @@
 
 import { db, transactions } from "../db";
 import { eq } from "drizzle-orm";
-import { createPublicClient, http, formatUnits } from "viem";
+import { createPublicClient, http, formatUnits, decodeEventLog } from "viem";
 import { bsc, bscTestnet } from "viem/chains";
 
 // ERC20 Transfer event ABI
@@ -92,6 +92,7 @@ export async function verifyTransaction(
 
     // 4. Verify transaction sender matches expected wallet
     const normalizedExpectedFrom = expectedFrom.toLowerCase();
+    const normalizedExpectedTo = expectedTo.toLowerCase();
     const normalizedTxFrom = tx.from.toLowerCase();
 
     if (normalizedTxFrom !== normalizedExpectedFrom) {
@@ -101,7 +102,9 @@ export async function verifyTransaction(
       };
     }
 
-    // 5. Verify transaction recipient matches expected contract
+    // 5. For USDT transfers, the transaction recipient (tx.to) is the USDT contract address
+    // The actual recipient (company wallet) is verified in the Transfer event logs below
+    // So we don't check tx.to against expectedTo - we only verify the Transfer event
     if (!tx.to) {
       return {
         valid: false,
@@ -109,15 +112,8 @@ export async function verifyTransaction(
       };
     }
 
-    const normalizedExpectedTo = expectedTo.toLowerCase();
-    const normalizedTxTo = tx.to.toLowerCase();
-
-    if (normalizedTxTo !== normalizedExpectedTo) {
-      return {
-        valid: false,
-        error: `Transaction recipient mismatch. Expected: ${expectedTo}, Got: ${tx.to}`,
-      };
-    }
+    // Note: We don't check tx.to here because for USDT transfers, tx.to is the USDT contract
+    // The actual recipient (company wallet) is verified in the Transfer event logs below
 
     // 6. Get transaction receipt to check status
     let receipt;
@@ -140,9 +136,18 @@ export async function verifyTransaction(
 
     // 8. For ERC20 transfers, verify the amount
     // Get USDT contract address
-    const USDT_CONTRACT = process.env.USDT_CONTRACT_ADDRESS || process.env.NEXT_PUBLIC_USDT_CONTRACT;
-    if (!USDT_CONTRACT) {
-      console.warn("USDT_CONTRACT_ADDRESS not set, skipping amount verification");
+    const USDT_CONTRACT = process.env.USDT_CONTRACT_ADDRESS || process.env.NEXT_PUBLIC_USDT_CONTRACT || "0x23D744B43aEe545DaBeC0D2081bD381Ab80C7d85";
+    
+    console.log(`\n🔍 ============================================`);
+    console.log(`🔍 TRANSACTION VERIFICATION: USDT CHECK`);
+    console.log(`🔍 ============================================`);
+    console.log(`🔍 USDT Contract Address: ${USDT_CONTRACT}`);
+    console.log(`🔍 From .env (USDT_CONTRACT_ADDRESS): ${process.env.USDT_CONTRACT_ADDRESS || "Not set"}`);
+    console.log(`🔍 From .env (NEXT_PUBLIC_USDT_CONTRACT): ${process.env.NEXT_PUBLIC_USDT_CONTRACT || "Not set"}`);
+    console.log(`🔍 Using: ${USDT_CONTRACT}`);
+    
+    if (!USDT_CONTRACT || USDT_CONTRACT === "0x0000000000000000000000000000000000000000") {
+      console.warn("⚠️ USDT_CONTRACT_ADDRESS not set or invalid, skipping amount verification");
     } else {
       // Get USDT decimals
       let usdtDecimals = 6; // Default
@@ -166,47 +171,85 @@ export async function verifyTransaction(
       }
 
       // Parse logs to find Transfer event
+      console.log(`🔍 Analyzing ${receipt.logs.length} transaction logs...`);
+      console.log(`🔍 Looking for logs from USDT contract: ${USDT_CONTRACT}`);
+      
+      // Log all unique contract addresses in the logs for debugging
+      const uniqueAddresses = [...new Set(receipt.logs.map(log => log.address.toLowerCase()))];
+      console.log(`🔍 Found ${uniqueAddresses.length} unique contract addresses in logs:`);
+      uniqueAddresses.forEach((addr, idx) => {
+        const matches = addr === USDT_CONTRACT.toLowerCase() ? " ✅ MATCHES USDT" : "";
+        console.log(`🔍   ${idx + 1}. ${addr}${matches}`);
+      });
+      
       const transferLogs = receipt.logs.filter((log) => {
         try {
-          return log.address.toLowerCase() === USDT_CONTRACT.toLowerCase();
+          const matches = log.address.toLowerCase() === USDT_CONTRACT.toLowerCase();
+          if (matches) {
+            console.log(`✅ Found USDT log from contract: ${log.address}`);
+          }
+          return matches;
         } catch {
           return false;
         }
       });
 
+      console.log(`🔍 Transaction verification: Found ${transferLogs.length} USDT transfer logs out of ${receipt.logs.length} total logs`);
+      console.log(`🔍 USDT Contract: ${USDT_CONTRACT}`);
+      console.log(`🔍 Expected from: ${normalizedExpectedFrom}`);
+      console.log(`🔍 Expected to: ${normalizedExpectedTo}`);
+
       if (transferLogs.length > 0) {
         // Decode Transfer event from logs
         let foundTransfer = false;
         let actualAmount = BigInt(0);
+        const allTransfers: Array<{ from: string; to: string; amount: string }> = [];
 
         for (const log of transferLogs) {
           try {
-            const decoded = publicClient.decodeEventLog({
+            const decoded = decodeEventLog({
               abi: ERC20_TRANSFER_ABI,
               data: log.data,
               topics: log.topics,
             });
 
             if (decoded.eventName === "Transfer") {
-              // Check if transfer is from expected sender
-              // The 'to' in Transfer event should be the membership contract (expectedTo)
-              // or the membership contract might have received it via another contract
               const fromAddress = (decoded.args as any).from?.toLowerCase();
               const toAddress = (decoded.args as any).to?.toLowerCase();
+              const value = (decoded.args as any).value as bigint;
+              const amountFormatted = parseFloat(formatUnits(value, usdtDecimals));
 
-              // Verify: transfer is from expected sender AND to expected recipient (membership contract)
+              allTransfers.push({
+                from: fromAddress,
+                to: toAddress,
+                amount: amountFormatted.toString(),
+              });
+
+              console.log(`🔍 Found Transfer: ${fromAddress} → ${toAddress}, Amount: ${amountFormatted} USDT`);
+
+              // Verify: transfer is from expected sender AND to expected recipient (company wallet)
               if (
                 fromAddress === normalizedExpectedFrom &&
                 toAddress === normalizedExpectedTo
               ) {
-                actualAmount = (decoded.args as any).value as bigint;
+                actualAmount = value;
                 foundTransfer = true;
+                console.log(`✅ Matching transfer found!`);
                 break;
               }
             }
-          } catch {
+          } catch (error: any) {
+            console.warn(`⚠️ Failed to decode log:`, error.message);
             // Continue to next log
           }
+        }
+
+        if (!foundTransfer && allTransfers.length > 0) {
+          console.error(`❌ No matching transfer found. All transfers:`, JSON.stringify(allTransfers, null, 2));
+          return {
+            valid: false,
+            error: `Could not find matching USDT transfer. Found transfers: ${allTransfers.map(t => `${t.from} → ${t.to} (${t.amount} USDT)`).join(", ")}. Expected: ${normalizedExpectedFrom} → ${normalizedExpectedTo}`,
+          };
         }
 
         if (foundTransfer) {
@@ -230,10 +273,14 @@ export async function verifyTransaction(
           };
         }
       } else {
-        // No transfer logs found
+        // No transfer logs found - log all receipt logs for debugging
+        console.error(`❌ No USDT transfer logs found. All receipt logs:`, receipt.logs.map(log => ({
+          address: log.address,
+          topics: log.topics,
+        })));
         return {
           valid: false,
-          error: "No USDT transfer found in transaction. This may not be a payment transaction.",
+          error: `No USDT transfer found in transaction. This may not be a payment transaction. USDT Contract: ${USDT_CONTRACT}`,
         };
       }
     }
@@ -260,48 +307,31 @@ export async function verifyTransaction(
 
 /**
  * Verify transaction for registration (Level 1 purchase)
- * Similar to verifyTransaction but may have different contract/amount logic
+ * Verifies USDT transfer to company wallet
  */
 export async function verifyRegistrationTransaction(
   txHash: string,
   expectedFrom: string,
   expectedAmount: number
 ): Promise<TransactionVerificationResult> {
-  // Get membership contract address
-  const MEMBERSHIP_CONTRACT = 
-    process.env.MEMBERSHIP_CONTRACT_ADDRESS || 
-    process.env.NEXT_PUBLIC_MEMBERSHIP_CONTRACT;
+  // Get company wallet address (where USDT should be sent)
+  const COMPANY_ACCOUNT = process.env.COMPANY_ACCOUNT_ADDRESS || "0x325d4a6f26babf3fb54a838a2fe6a79cf3087cf7";
 
-  if (!MEMBERSHIP_CONTRACT) {
-    return {
-      valid: false,
-      error: "Membership contract address not configured",
-    };
-  }
-
-  return verifyTransaction(txHash, expectedFrom, MEMBERSHIP_CONTRACT, expectedAmount);
+  return verifyTransaction(txHash, expectedFrom, COMPANY_ACCOUNT, expectedAmount);
 }
 
 /**
  * Verify transaction for upgrade (Level 2+ purchase)
+ * Verifies USDT transfer to company wallet
  */
 export async function verifyUpgradeTransaction(
   txHash: string,
   expectedFrom: string,
   expectedAmount: number
 ): Promise<TransactionVerificationResult> {
-  // Get membership contract address
-  const MEMBERSHIP_CONTRACT = 
-    process.env.MEMBERSHIP_CONTRACT_ADDRESS || 
-    process.env.NEXT_PUBLIC_MEMBERSHIP_CONTRACT;
+  // Get company wallet address (where USDT should be sent)
+  const COMPANY_ACCOUNT = process.env.COMPANY_ACCOUNT_ADDRESS || "0x325d4a6f26babf3fb54a838a2fe6a79cf3087cf7";
 
-  if (!MEMBERSHIP_CONTRACT) {
-    return {
-      valid: false,
-      error: "Membership contract address not configured",
-    };
-  }
-
-  return verifyTransaction(txHash, expectedFrom, MEMBERSHIP_CONTRACT, expectedAmount);
+  return verifyTransaction(txHash, expectedFrom, COMPANY_ACCOUNT, expectedAmount);
 }
 

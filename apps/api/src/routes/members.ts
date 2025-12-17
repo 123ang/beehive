@@ -27,6 +27,28 @@ memberRoutes.route("/nft", memberNftRouter);
 memberRoutes.route("/classes", memberClassesRouter);
 
 /**
+ * Check if a member exists by wallet address (public, no auth required)
+ */
+memberRoutes.get("/check/:walletAddress", async (c) => {
+  const walletAddress = c.req.param("walletAddress");
+  if (!walletAddress || !/^0x[a-fA-F0-9]{40}$/i.test(walletAddress)) {
+    return c.json({ success: false, error: "Invalid wallet address" }, 400);
+  }
+
+  const member = await db.query.members.findFirst({
+    where: eq(members.walletAddress, walletAddress.toLowerCase()),
+  });
+
+  return c.json({
+    success: true,
+    data: {
+      exists: !!member,
+      currentLevel: member?.currentLevel || 0,
+    },
+  });
+});
+
+/**
  * Get member's dashboard data by wallet address (no auth required)
  * This allows users to view their own data after connecting wallet
  */
@@ -107,6 +129,17 @@ memberRoutes.get("/dashboard", async (c) => {
 
   const referralLink = `${process.env.FRONTEND_URL || "http://localhost:3001"}/register?referral_code=${referralCode}`;
 
+  // Get sponsor information if exists
+  let sponsorWalletAddress: string | null = null;
+  if (member.sponsorId) {
+    const sponsor = await db.query.members.findFirst({
+      where: eq(members.id, member.sponsorId),
+    });
+    if (sponsor) {
+      sponsorWalletAddress = sponsor.walletAddress;
+    }
+  }
+
   // Get reward summary
   const rewardSummary = await rewardService.getRewardSummary(address);
 
@@ -133,12 +166,16 @@ memberRoutes.get("/dashboard", async (c) => {
       totalEarningsBCC: rewardSummary.totalBCC,
       pendingRewardsUSDT: rewardSummary.pendingUSDT,
       pendingRewardsBCC: rewardSummary.pendingBCC,
+      bccBalance: member.bccBalance?.toString() || "0", // Available/transferable BCC balance
       directReferrals: actualDirectReferrals,
       teamSize,
       totalInflow: member.totalInflow,
       joinedAt: member.joinedAt,
       referralCode,
       referralLink,
+      sponsor: sponsorWalletAddress ? {
+        walletAddress: sponsorWalletAddress,
+      } : null,
     },
   });
 });
@@ -486,19 +523,101 @@ const registerSchema = z.object({
   txHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
   level: z.number().int().min(1).max(19),
   referrerAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+  walletAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
 });
 
-memberRoutes.post("/register", authMiddleware, zValidator("json", registerSchema), async (c) => {
-  const user = c.get("user");
-  const { txHash, level, referrerAddress } = c.req.valid("json");
+memberRoutes.post("/register", zValidator("json", registerSchema), async (c) => {
+  const { txHash, level, referrerAddress, walletAddress } = c.req.valid("json");
+  const normalizedAddress = walletAddress.toLowerCase();
 
   // Check if already a member
   const existing = await db.query.members.findFirst({
-    where: eq(members.walletAddress, user.walletAddress),
+    where: eq(members.walletAddress, normalizedAddress),
   });
 
-  if (existing) {
-    return c.json({ success: false, error: "Already a member" }, 400);
+  // If member exists and purchasing Level 1, upgrade them instead of registering
+  if (existing && level === 1) {
+    // Redirect to upgrade endpoint logic
+    const previousLevel = existing.currentLevel || 0;
+    if (previousLevel === 0) {
+      // Upgrade from Level 0 to Level 1
+      const levelInfo = MEMBERSHIP_LEVELS.find((l) => l.level === level);
+      if (!levelInfo) {
+        return c.json({ success: false, error: "Invalid level" }, 400);
+      }
+
+      // Verify transaction
+      const { verifyUpgradeTransaction } = await import("../utils/transactionVerification");
+      const verification = await verifyUpgradeTransaction(
+        txHash,
+        normalizedAddress,
+        levelInfo.priceUSDT
+      );
+
+      if (!verification.valid) {
+        return c.json({
+          success: false,
+          error: verification.error || "Transaction verification failed",
+        }, 400);
+      }
+
+      // Update member's level from 0 to 1
+      await db
+        .update(members)
+        .set({
+          currentLevel: 1,
+          totalInflow: (parseFloat(existing.totalInflow?.toString() || "0") + levelInfo.priceUSDT).toString(),
+        })
+        .where(eq(members.id, existing.id));
+
+      // Distribute purchase payment (Level 1: 100 to company, 30 to IT)
+      const { distributePurchasePayment } = await import("../utils/paymentDistribution");
+      await distributePurchasePayment(
+        normalizedAddress,
+        1,
+        txHash,
+        0 // previousLevel = 0
+      );
+
+      // Process direct sponsor reward (will be pending until user purchases Level 2)
+      const sponsor = await db.query.members.findFirst({
+        where: eq(members.id, existing.sponsorId || 0),
+      });
+
+      if (sponsor) {
+        await rewardService.processDirectSponsorReward(
+          sponsor.walletAddress,
+          normalizedAddress,
+          1 // newMemberLevel = 1
+        );
+      }
+
+      // Award BCC rewards for Level 1
+      const { awardBCCReward } = await import("../utils/bccRewards");
+      await awardBCCReward(
+        normalizedAddress,
+        1,
+        undefined,
+        `BCC reward for Level 1 membership`
+      );
+
+      return c.json({
+        success: true,
+        data: {
+          memberId: existing.id,
+          level: 1,
+          message: "Upgraded from Level 0 to Level 1",
+        },
+      });
+    }
+  }
+
+  if (existing && level > 1) {
+    // If member exists and purchasing higher level, use upgrade endpoint
+    return c.json({ 
+      success: false, 
+      error: "Member already exists. Please use the upgrade endpoint instead." 
+    }, 400);
   }
 
   // Get sponsor
@@ -517,10 +636,11 @@ memberRoutes.post("/register", authMiddleware, zValidator("json", registerSchema
   }
 
   // Verify transaction on blockchain before processing
+  // This verifies ownership - transaction must be from the wallet address
   const { verifyRegistrationTransaction } = await import("../utils/transactionVerification");
   const verification = await verifyRegistrationTransaction(
     txHash,
-    user.walletAddress.toLowerCase(),
+    normalizedAddress,
     levelInfo.priceUSDT
   );
 
@@ -542,7 +662,7 @@ memberRoutes.post("/register", authMiddleware, zValidator("json", registerSchema
   await db
     .insert(members)
     .values({
-      walletAddress: user.walletAddress.toLowerCase(),
+      walletAddress: normalizedAddress,
       username: null,
       currentLevel: level,
       totalInflow: levelInfo?.priceUSDT.toString() || "0",
@@ -553,7 +673,7 @@ memberRoutes.post("/register", authMiddleware, zValidator("json", registerSchema
   const [newMember] = await db
     .select()
     .from(members)
-    .where(eq(members.walletAddress, user.walletAddress.toLowerCase()))
+    .where(eq(members.walletAddress, normalizedAddress))
     .limit(1);
 
   if (!newMember) {
@@ -569,24 +689,41 @@ memberRoutes.post("/register", authMiddleware, zValidator("json", registerSchema
   );
 
   // Distribute purchase payment (Level 1: 100 to company, 30 to IT; Upgrades: 100% to company)
-  const { distributePurchasePayment } = await import("../utils/paymentDistribution");
-  await distributePurchasePayment(
-    user.walletAddress.toLowerCase(),
-    level,
-    txHash,
-    0 // previousLevel = 0 for new members
-  );
+  // Note: IT transfer failure doesn't block reward processing
+  try {
+    const { distributePurchasePayment } = await import("../utils/paymentDistribution");
+    await distributePurchasePayment(
+      normalizedAddress,
+      level,
+      txHash,
+      0 // previousLevel = 0 for new members
+    );
+  } catch (error: any) {
+    console.error(`❌ Payment distribution error (non-blocking):`, error.message);
+    // Continue even if payment distribution fails - reward processing is independent
+  }
 
-  // Process direct sponsor reward
-  await rewardService.processDirectSponsorReward(
-    referrerAddress.toLowerCase(),
-    user.walletAddress.toLowerCase()
-  );
+  // Process direct sponsor reward (will be pending until user purchases Level 2)
+  // This is independent of IT transfer and should always run
+  try {
+    console.log(`\n🎁 ============================================`);
+    console.log(`🎁 PROCESSING DIRECT SPONSOR REWARD (INDEPENDENT OF IT TRANSFER)`);
+    console.log(`🎁 ============================================`);
+    await rewardService.processDirectSponsorReward(
+      referrerAddress.toLowerCase(),
+      normalizedAddress,
+      level // newMemberLevel
+    );
+    console.log(`✅ Direct sponsor reward processing completed`);
+  } catch (error: any) {
+    console.error(`❌ Failed to process direct sponsor reward:`, error);
+    // Log but don't throw - registration should still succeed
+  }
 
   // Process layer reward if level >= 2
   if (level >= 2) {
     await rewardService.processLayerReward(
-      user.walletAddress.toLowerCase(),
+      normalizedAddress,
       level,
       levelInfo?.priceUSDT || 0
     );
@@ -597,7 +734,7 @@ memberRoutes.post("/register", authMiddleware, zValidator("json", registerSchema
   const { awardBCCReward } = await import("../utils/bccRewards");
   for (let l = 1; l <= level; l++) {
     await awardBCCReward(
-      user.walletAddress.toLowerCase(),
+      normalizedAddress,
       l,
       undefined,
       `BCC reward for Level ${l} membership`
@@ -607,7 +744,8 @@ memberRoutes.post("/register", authMiddleware, zValidator("json", registerSchema
   // Log member activity
   const { logMemberActivity } = await import("../utils/memberActivityLogger");
   await logMemberActivity({
-    walletAddress: user.walletAddress.toLowerCase(),
+    walletAddress: normalizedAddress,
+    memberId: newMember.id, // Pass memberId directly
     activityType: "register",
     metadata: {
       level,
@@ -642,21 +780,13 @@ const upgradeSchema = z.object({
 
 memberRoutes.post(
   "/upgrade", 
-  authMiddleware,
   financialRateLimit,
   zValidator("json", upgradeSchema), 
   async (c) => {
-    const user = c.get("user");
     const { txHash, level, walletAddress } = c.req.valid("json");
     const normalizedWallet = walletAddress.toLowerCase();
 
-    // Verify wallet address matches authenticated user
-    if (user.walletAddress.toLowerCase() !== normalizedWallet) {
-      return c.json({ 
-        success: false, 
-        error: "Unauthorized: You can only upgrade your own membership" 
-      }, 403);
-    }
+    // Ownership is verified via transaction - transaction must be from this wallet
 
   // Check if member exists
   const existingMember = await db.query.members.findFirst({
@@ -722,17 +852,25 @@ memberRoutes.post(
       })
       .where(eq(members.id, existingMember.id));
 
-    // Insert transaction record for the purchase
-    await db.insert(transactions).values({
-      walletAddress: normalizedWallet,
-      txHash: txHash,
-      transactionType: "purchase_membership",
-      currency: "USDT",
-      amount: levelInfo.priceUSDT.toString(),
-      status: "confirmed",
-      level: level,
-      notes: `Upgrade from Level ${previousLevel} to Level ${level}`,
+    // Insert transaction record for the purchase (check for duplicates first)
+    const existingTx = await db.query.transactions.findFirst({
+      where: eq(transactions.txHash, txHash),
     });
+
+    if (!existingTx) {
+      await db.insert(transactions).values({
+        walletAddress: normalizedWallet,
+        txHash: txHash,
+        transactionType: "purchase_membership",
+        currency: "USDT",
+        amount: levelInfo.priceUSDT.toString(),
+        status: "confirmed",
+        level: level,
+        notes: `Upgrade from Level ${previousLevel} to Level ${level}`,
+      });
+    } else {
+      console.log(`⚠️ Transaction ${txHash} already exists in database, skipping insert`);
+    }
 
     // Distribute purchase payment (Level 1: 100 to company, 30 to IT; Upgrades: 100% to company)
     const { distributePurchasePayment } = await import("../utils/paymentDistribution");
@@ -750,6 +888,12 @@ memberRoutes.post(
         level,
         levelInfo.priceUSDT
       );
+    }
+
+    // Release pending rewards when upgrading to Level 2
+    if (level === 2) {
+      const releasedCount = await rewardService.releasePendingRewards(normalizedWallet, level);
+      console.log(`Released ${releasedCount} pending rewards for ${normalizedWallet} after upgrading to Level 2`);
     }
 
     // Award BCC rewards for levels from previousLevel+1 to the new level
@@ -771,6 +915,7 @@ memberRoutes.post(
     const { logMemberActivity } = await import("../utils/memberActivityLogger");
     await logMemberActivity({
       walletAddress: normalizedWallet,
+      memberId: existingMember.id, // Pass memberId directly
       activityType: "purchase_membership",
       metadata: {
         previousLevel,
@@ -950,6 +1095,7 @@ memberRoutes.post(
       const { logMemberActivity } = await import("../utils/memberActivityLogger");
       await logMemberActivity({
         walletAddress: normalizedWallet,
+        memberId: member.id, // Pass memberId directly
         activityType: "withdrawal",
         metadata: { currency, amount, withdrawalId: insertedWithdrawal.id },
       });

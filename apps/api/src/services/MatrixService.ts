@@ -24,7 +24,8 @@ export class MatrixService {
   /**
    * Find placement position for a new member following the Direct Sales Tree algorithm
    * Phase A: Direct under sponsor if < 3 children
-   * Phase B: Even spillover with round-robin, slot-based algorithm
+   * Phase B: Breadth-first fill: Subtree 1 pos 1, Subtree 2 pos 1, Subtree 3 pos 1,
+   *         then Subtree 1 pos 2, Subtree 2 pos 2, Subtree 3 pos 2, etc.
    */
   async findPlacement(sponsorId: number): Promise<PlacementResult | null> {
     // Phase A: Try to place directly under sponsor
@@ -42,49 +43,118 @@ export class MatrixService {
       }
     }
 
-    // Phase B: Even Spillover (Round-Robin, Slot-Based Algorithm)
-    // Step 1: Get all candidates in sponsor's entire subtree with < 3 children
-    const candidates = await db
+    // Phase B: Breadth-first fill algorithm
+    // Priority order:
+    // 1. Subtree 1, Position 1
+    // 2. Subtree 2, Position 1
+    // 3. Subtree 3, Position 1
+    // 4. Subtree 1, Position 2
+    // 5. Subtree 2, Position 2
+    // 6. Subtree 3, Position 2
+    // 7. Subtree 1, Position 3
+    // 8. Subtree 2, Position 3
+    // 9. Subtree 3, Position 3
+    // Then continue to deeper levels with same pattern
+
+    // Get the 3 direct children of the sponsor (subtree 1, 2, 3) ordered by position
+    const directChildren = await db
       .select({
         memberId: members.id,
-        depth: memberClosure.depth,
+        position: placements.position,
         joinedAt: members.joinedAt,
       })
-      .from(memberClosure)
-      .innerJoin(members, eq(memberClosure.descendantId, members.id))
-      .where(eq(memberClosure.ancestorId, sponsorId))
-      .orderBy(asc(memberClosure.depth), asc(members.joinedAt), asc(members.id));
+      .from(placements)
+      .innerJoin(members, eq(placements.childId, members.id))
+      .where(eq(placements.parentId, sponsorId))
+      .orderBy(asc(placements.position));
 
-    // Step 2: Build slots from candidates
+    if (directChildren.length === 0) {
+      // Should not happen if Phase A worked, but handle it
+      return null;
+    }
+
+    // Build slots in breadth-first order
     interface Slot {
       parentId: number;
       position: number; // 1, 2, or 3 (the actual position number)
-      slotIndex: number; // 1, 2, or 3 (which free slot this is: 1st free, 2nd free, 3rd free)
+      subtreePosition: number; // 1, 2, or 3 (which direct child this is)
       depth: number;
-      parentJoinedAt: Date;
     }
 
     const slots: Slot[] = [];
 
-    for (const candidate of candidates) {
-      const childCount = await this.getChildCount(candidate.memberId);
-      const usedPositions = await this.getUsedPositions(candidate.memberId);
-      const freeCount = 3 - childCount;
-
-      if (freeCount > 0) {
-        // Get available positions in order (1, 2, 3)
-        const availablePositions = [1, 2, 3].filter((p) => !usedPositions.includes(p));
+    // First, check direct children (depth 1) in breadth-first order
+    // For each position (1, 2, 3)
+    for (let pos = 1; pos <= 3; pos++) {
+      // For each direct child (subtree) in order (position 1, 2, 3)
+      for (const child of directChildren) {
+        const childCount = await this.getChildCount(child.memberId);
+        const usedPositions = await this.getUsedPositions(child.memberId);
         
-        // Create slots for each free position
-        // slotIndex = 1 for first free, 2 for second free, 3 for third free
-        for (let slotIndex = 1; slotIndex <= freeCount; slotIndex++) {
+        // Check if this position is available for this subtree
+        if (!usedPositions.includes(pos) && childCount < 3) {
           slots.push({
-            parentId: candidate.memberId,
-            position: availablePositions[slotIndex - 1], // actual position number (1, 2, or 3)
-            slotIndex: slotIndex, // which free slot this is (1st, 2nd, or 3rd)
-            depth: candidate.depth,
-            parentJoinedAt: candidate.joinedAt,
+            parentId: child.memberId,
+            position: pos,
+            subtreePosition: child.position,
+            depth: 1, // Direct children are at depth 1
           });
+        }
+      }
+    }
+
+    // If no slots found in direct children, search deeper levels
+    // Continue with same breadth-first pattern at each depth
+    if (slots.length === 0) {
+      // Get all descendants at depth 2 and beyond, grouped by depth
+      const allDescendants = await db
+        .select({
+          memberId: members.id,
+          depth: memberClosure.depth,
+          joinedAt: members.joinedAt,
+        })
+        .from(memberClosure)
+        .innerJoin(members, eq(memberClosure.descendantId, members.id))
+        .where(
+          and(
+            eq(memberClosure.ancestorId, sponsorId),
+            sql`${memberClosure.depth} > 1`
+          )
+        )
+        .orderBy(asc(memberClosure.depth), asc(members.joinedAt), asc(members.id));
+
+      // Group by depth
+      const byDepth = new Map<number, typeof allDescendants>();
+      for (const candidate of allDescendants) {
+        if (!byDepth.has(candidate.depth)) {
+          byDepth.set(candidate.depth, []);
+        }
+        byDepth.get(candidate.depth)!.push(candidate);
+      }
+
+      // For each depth level (2, 3, 4, ...)
+      const sortedDepths = Array.from(byDepth.keys()).sort((a, b) => a - b);
+      for (const depth of sortedDepths) {
+        const candidatesAtDepth = byDepth.get(depth)!;
+        
+        // For each position (1, 2, 3) - breadth-first
+        for (let pos = 1; pos <= 3; pos++) {
+          // For each candidate at this depth
+          for (const candidate of candidatesAtDepth) {
+            const childCount = await this.getChildCount(candidate.memberId);
+            const usedPositions = await this.getUsedPositions(candidate.memberId);
+            
+            if (!usedPositions.includes(pos) && childCount < 3) {
+              slots.push({
+                parentId: candidate.memberId,
+                position: pos,
+                subtreePosition: 0, // Not a direct child, but we track depth
+                depth: candidate.depth,
+              });
+              // Only take first available at this depth/position combination
+              break;
+            }
+          }
         }
       }
     }
@@ -93,15 +163,15 @@ export class MatrixService {
       return null; // No available slots
     }
 
-    // Step 3: Sort slots deterministically
-    // 1) slot index ASC (slot #1 before #2 before #3)
-    // 2) depth ASC (shallower first)
-    // 3) parent's joined_at ASC (earlier first)
-    // 4) parent_id ASC (stable tiebreak)
+    // Sort slots to ensure breadth-first order:
+    // 1) Position ASC (position 1 before 2 before 3)
+    // 2) Depth ASC (shallower first)
+    // 3) Subtree position ASC (subtree 1 before 2 before 3) - only for depth 1
+    // 4) Parent ID ASC (stable tiebreak)
     slots.sort((a, b) => {
-      // First: slot index (1st free slot before 2nd free slot before 3rd free slot)
-      if (a.slotIndex !== b.slotIndex) {
-        return a.slotIndex - b.slotIndex;
+      // First: position (1 before 2 before 3)
+      if (a.position !== b.position) {
+        return a.position - b.position;
       }
       
       // Second: depth (shallower first)
@@ -109,36 +179,19 @@ export class MatrixService {
         return a.depth - b.depth;
       }
       
-      // Third: parent's joined_at (earlier first)
-      const timeDiff = a.parentJoinedAt.getTime() - b.parentJoinedAt.getTime();
-      if (timeDiff !== 0) {
-        return timeDiff;
+      // Third: subtree position (subtree 1 before 2 before 3) - only matters at depth 1
+      if (a.depth === 1 && b.depth === 1 && a.subtreePosition !== b.subtreePosition) {
+        return a.subtreePosition - b.subtreePosition;
       }
       
-      // Fourth: parent_id (stable tiebreak)
+      // Fourth: parent ID (stable tiebreak)
       return a.parentId - b.parentId;
     });
 
-    // Step 4: Round-robin selection
-    // Count how many members this sponsor referred BEFORE this new one
-    const referralsBefore = await db
-      .select({ count: sql<number>`COUNT(*)` })
-      .from(members)
-      .where(eq(members.sponsorId, sponsorId));
-
-    const referralsCount = referralsBefore[0]?.count || 0;
-
-    // If < 3, Phase A handled it already, so we're in Phase B
-    // k = referrals_before - 3 + 1 (1-based index into slots)
-    const k = referralsCount - 3 + 1;
-    
-    // Wrap around if past the end
-    const selectedSlotIndex = ((k - 1) % slots.length);
-    const selectedSlot = slots[selectedSlotIndex];
-
+    // Return the first available slot (breadth-first order)
     return {
-      parentId: selectedSlot.parentId,
-      position: selectedSlot.position,
+      parentId: slots[0].parentId,
+      position: slots[0].position,
     };
   }
 

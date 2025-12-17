@@ -21,53 +21,82 @@ export async function awardBCCReward(
   sourceWallet?: string,
   notes?: string
 ): Promise<void> {
-  // Find the level configuration
-  const levelConfig = MEMBERSHIP_LEVELS.find((l) => l.level === level);
-  
-  if (!levelConfig) {
-    console.warn(`Invalid membership level: ${level}`);
-    return;
+  try {
+    console.log(`\n🎁 ============================================`);
+    console.log(`🎁 AWARDING BCC REWARD`);
+    console.log(`🎁 ============================================`);
+    console.log(`🎁 Wallet: ${walletAddress}`);
+    console.log(`🎁 Level: ${level}`);
+    console.log(`🎁 Notes: ${notes || 'N/A'}`);
+    
+    // Find the level configuration
+    const levelConfig = MEMBERSHIP_LEVELS.find((l) => l.level === level);
+    
+    if (!levelConfig) {
+      console.error(`❌ Invalid membership level: ${level}`);
+      return;
+    }
+
+    const bccAmount = levelConfig.bccReward;
+    console.log(`🎁 BCC Amount from config: ${bccAmount}`);
+
+    if (bccAmount <= 0) {
+      console.warn(`⚠️ No BCC reward for level ${level} (amount: ${bccAmount})`);
+      return;
+    }
+
+    // Create BCC reward record in rewards table
+    console.log(`🎁 Inserting reward record...`);
+    await db.insert(rewards).values({
+      recipientWallet: walletAddress.toLowerCase(),
+      sourceWallet: sourceWallet?.toLowerCase() || null,
+      rewardType: "bcc_token",
+      amount: bccAmount.toString(),
+      currency: "BCC",
+      status: "instant", // BCC rewards are instant
+      notes: notes || `BCC reward for Level ${level} membership`,
+    });
+    console.log(`✅ Reward record inserted`);
+
+    // Update BCC balance in members table
+    const normalizedWallet = walletAddress.toLowerCase();
+    console.log(`🎁 Looking up member: ${normalizedWallet}`);
+    const [member] = await db
+      .select()
+      .from(members)
+      .where(eq(members.walletAddress, normalizedWallet))
+      .limit(1);
+
+    if (member) {
+      // Update balance by adding the reward amount
+      const currentBalance = parseFloat(member.bccBalance?.toString() || "0");
+      const newBalance = (currentBalance + bccAmount).toString();
+      console.log(`🎁 Current BCC Balance: ${currentBalance}`);
+      console.log(`🎁 New BCC Balance: ${newBalance}`);
+
+      await db
+        .update(members)
+        .set({
+          bccBalance: newBalance,
+        })
+        .where(eq(members.walletAddress, normalizedWallet));
+      console.log(`✅ Member BCC balance updated`);
+    } else {
+      console.warn(`⚠️ Member not found for wallet ${normalizedWallet}, reward recorded but balance not updated`);
+    }
+
+    console.log(`✅ Successfully awarded ${bccAmount} BCC to ${walletAddress} for Level ${level}`);
+    console.log(`🎁 ============================================\n`);
+  } catch (error: any) {
+    console.error(`\n❌ ============================================`);
+    console.error(`❌ ERROR AWARDING BCC REWARD`);
+    console.error(`❌ ============================================`);
+    console.error(`❌ Wallet: ${walletAddress}`);
+    console.error(`❌ Level: ${level}`);
+    console.error(`❌ Error: ${error.message}`);
+    console.error(`❌ Stack: ${error.stack}`);
+    console.error(`❌ ============================================\n`);
+    throw error; // Re-throw to ensure the error is visible
   }
-
-  const bccAmount = levelConfig.bccReward;
-
-  if (bccAmount <= 0) {
-    console.warn(`No BCC reward for level ${level}`);
-    return;
-  }
-
-  // Create BCC reward record in rewards table
-  await db.insert(rewards).values({
-    recipientWallet: walletAddress.toLowerCase(),
-    sourceWallet: sourceWallet?.toLowerCase() || null,
-    rewardType: "bcc_token",
-    amount: bccAmount.toString(),
-    currency: "BCC",
-    status: "instant", // BCC rewards are instant
-    notes: notes || `BCC reward for Level ${level} membership`,
-  });
-
-  // Update BCC balance in members table
-  const normalizedWallet = walletAddress.toLowerCase();
-  const [member] = await db
-    .select()
-    .from(members)
-    .where(eq(members.walletAddress, normalizedWallet))
-    .limit(1);
-
-  if (member) {
-    // Update balance by adding the reward amount
-    const currentBalance = parseFloat(member.bccBalance?.toString() || "0");
-    const newBalance = (currentBalance + bccAmount).toString();
-
-    await db
-      .update(members)
-      .set({
-        bccBalance: newBalance,
-      })
-      .where(eq(members.walletAddress, normalizedWallet));
-  }
-
-  console.log(`Awarded ${bccAmount} BCC to ${walletAddress} for Level ${level}`);
 }
 

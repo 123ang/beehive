@@ -7,7 +7,7 @@ import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { useTranslation } from "@/i18n/TranslationProvider";
-import { ArrowLeft, User, Mail, CheckCircle, AlertCircle, Users } from "lucide-react";
+import { ArrowLeft, User, Mail, CheckCircle, AlertCircle, Users, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
@@ -166,11 +166,12 @@ export default function RegisterPage() {
 
       if (!result.success) {
         setErrors({ submit: result.error || t("register.errors.submitFailed") });
+        setIsSubmitting(false);
         return;
       }
 
-      // Redirect to membership page
-      router.push("/membership");
+      // Redirect to dashboard after successful registration
+      router.push("/user/dashboard");
     } catch (error) {
       console.error("Registration error:", error);
       setErrors({ submit: t("register.errors.submitFailed") });
@@ -410,9 +411,16 @@ export default function RegisterPage() {
               <button
                 type="submit"
                 disabled={isSubmitting || !isConnected || !formData.referralCode}
-                className="w-full px-6 py-4 rounded-xl bg-gradient-to-r from-honey-500 to-honey-600 text-black font-bold text-lg hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full px-6 py-4 rounded-xl bg-gradient-to-r from-honey-500 to-honey-600 text-black font-bold text-lg hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                {isSubmitting ? t("register.submitting") : t("register.submit")}
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>{t("register.submitting")}</span>
+                  </>
+                ) : (
+                  <span>{t("register.submit")}</span>
+                )}
               </button>
             </form>
           </motion.div>

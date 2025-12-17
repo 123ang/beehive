@@ -272,35 +272,28 @@ authRoutes.post("/register", authRateLimit, zValidator("json", registerSchema), 
         
         const sponsorMemberId = sponsorMember.id;
 
-        // Generate member ID and referral code
-        const memberIdString = existingUser.memberId || generateMemberId(existingUser.id);
-        
-        // Generate unique referral code if user doesn't have one
+        // Generate unique referral code
         let finalReferralCode: string;
-        if (existingUser.referralCode) {
-          finalReferralCode = existingUser.referralCode;
-        } else {
-          let attempts = 0;
-          const maxAttempts = 10;
+        let attempts = 0;
+        const maxAttempts = 10;
+        
+        do {
+          finalReferralCode = generateReferralCode();
+          attempts++;
           
-          do {
-            finalReferralCode = generateReferralCode();
-            attempts++;
-            
-            // Check if referral code already exists
-            const existingCode = await db.query.members.findFirst({
-              where: eq(members.referralCode, finalReferralCode),
-            });
-            
-            if (!existingCode) {
-              break; // Unique code found
-            }
-            
-            if (attempts >= maxAttempts) {
-              throw new Error(`Failed to generate unique referral code after ${maxAttempts} attempts`);
-            }
-          } while (true);
-        }
+          // Check if referral code already exists
+          const existingCode = await db.query.members.findFirst({
+            where: eq(members.referralCode, finalReferralCode),
+          });
+          
+          if (!existingCode) {
+            break; // Unique code found
+          }
+          
+          if (attempts >= maxAttempts) {
+            throw new Error(`Failed to generate unique referral code after ${maxAttempts} attempts`);
+          }
+        } while (true);
 
         // Create member with level = 0
         await db
@@ -310,7 +303,6 @@ authRoutes.post("/register", authRateLimit, zValidator("json", registerSchema), 
             username: username || existingUser.username || null,
             currentLevel: 0,
             sponsorId: sponsorMemberId,
-            memberId: memberIdString,
             referralCode: finalReferralCode,
           });
 
@@ -322,6 +314,19 @@ authRoutes.post("/register", authRateLimit, zValidator("json", registerSchema), 
         if (!newMember) {
           throw new Error("Failed to create member");
         }
+
+        // Generate memberId immediately after creating the member
+        const memberIdString = generateMemberId(newMember.id);
+        await db
+          .update(members)
+          .set({ memberId: memberIdString })
+          .where(eq(members.id, newMember.id));
+
+        // Update user with memberId
+        await db
+          .update(users)
+          .set({ memberId: memberIdString })
+          .where(eq(users.id, existingUser.id));
 
         // Find placement position in matrix tree
         const placement = await matrixService.findPlacement(sponsorMemberId);
@@ -338,16 +343,6 @@ authRoutes.post("/register", authRateLimit, zValidator("json", registerSchema), 
             sponsorMemberId
           );
         }
-
-        // Update user with member ID if not set
-        if (!existingUser.memberId) {
-          await db
-            .update(users)
-            .set({
-              memberId: memberIdString,
-            })
-            .where(eq(users.id, existingUser.id));
-        }
       }
 
       const updatedUser = await db.query.users.findFirst({
@@ -361,7 +356,6 @@ authRoutes.post("/register", authRateLimit, zValidator("json", registerSchema), 
           walletAddress: updatedUser!.walletAddress,
           username: updatedUser!.username,
           email: updatedUser!.email,
-          referralCode: updatedUser!.referralCode,
           memberId: updatedUser!.memberId,
         },
       });
@@ -438,9 +432,7 @@ authRoutes.post("/register", authRateLimit, zValidator("json", registerSchema), 
         
         const sponsorMemberId = sponsorMember.id;
 
-        // Generate member ID and referral code
-        const memberIdString = generateMemberId(insertedUser.id);
-        
+        // Generate referral code (memberId will be generated later based on members.id)
         // Generate unique referral code
         let finalReferralCode: string;
         let attempts = 0;
@@ -472,7 +464,6 @@ authRoutes.post("/register", authRateLimit, zValidator("json", registerSchema), 
             username: username || null,
             currentLevel: 0,
             sponsorId: sponsorMemberId,
-            memberId: memberIdString,
             referralCode: finalReferralCode,
           });
 
@@ -484,6 +475,19 @@ authRoutes.post("/register", authRateLimit, zValidator("json", registerSchema), 
         if (!newMember) {
           throw new Error("Failed to create member");
         }
+
+        // Generate memberId immediately after creating the member
+        const memberIdString = generateMemberId(newMember.id);
+        await db
+          .update(members)
+          .set({ memberId: memberIdString })
+          .where(eq(members.id, newMember.id));
+
+        // Update user with memberId
+        await db
+          .update(users)
+          .set({ memberId: memberIdString })
+          .where(eq(users.id, insertedUser.id));
 
         // Find placement position in matrix tree
         const placement = await matrixService.findPlacement(sponsorMemberId);
@@ -500,14 +504,6 @@ authRoutes.post("/register", authRateLimit, zValidator("json", registerSchema), 
             sponsorMemberId
           );
         }
-
-        // Update user with member ID
-        await db
-          .update(users)
-          .set({
-            memberId: memberIdString,
-          })
-          .where(eq(users.id, insertedUser.id));
       }
 
       // Get updated user
@@ -522,7 +518,6 @@ authRoutes.post("/register", authRateLimit, zValidator("json", registerSchema), 
           walletAddress: updatedUser!.walletAddress,
           username: updatedUser!.username,
           email: updatedUser!.email,
-          referralCode: updatedUser!.referralCode,
           memberId: updatedUser!.memberId,
         },
       });

@@ -33,6 +33,7 @@ export default function MembershipPage() {
   const [selectedLevel, setSelectedLevel] = useState<number | null>(null);
   const [currentUserLevel, setCurrentUserLevel] = useState<number>(0);
   const [isLoadingLevel, setIsLoadingLevel] = useState(false);
+  const [referrerForPurchase, setReferrerForPurchase] = useState<string | null>(null);
   
   // Get referrer from URL parameter
   const [referrerAddress, setReferrerAddress] = useState<string | null>(null);
@@ -76,35 +77,58 @@ export default function MembershipPage() {
   const handlePurchase = async (level: number) => {
     if (!isConnected || !address) return;
     
-    // For Level 1, need a referrer - get from URL, dashboard, or show error
-    // For upgrades, use existing sponsor
-    let referrer = address; // Default fallback
+    // Get referrer from dashboard (if member) or URL parameter
+    let referrer: string | null = null;
     
     try {
       const dashboard = await api.getDashboard(address);
-      if (dashboard.success && dashboard.data?.sponsor?.walletAddress) {
-        // Existing member - use their sponsor
-        referrer = dashboard.data.sponsor.walletAddress;
-      } else if (level === 1) {
-        // New member - need referrer from URL or show error
-        if (referrerAddress) {
-          referrer = referrerAddress as `0x${string}`;
-        } else {
-          alert("Please provide a referrer address. Add ?ref=0x... to the URL or visit the membership page with a referral link.");
-          return;
+      if (dashboard.success && dashboard.data) {
+        // If user is already a member, use their sponsor
+        if (dashboard.data.isMember && dashboard.data.sponsor?.walletAddress) {
+          referrer = dashboard.data.sponsor.walletAddress;
+        } 
+        // If user is not a member yet (Level 1 purchase), check URL parameter
+        else if (level === 1) {
+          if (referrerAddress) {
+            referrer = referrerAddress;
+          } else {
+            alert("Please provide a referrer address. Add ?ref=0x... to the URL or visit the membership page with a referral link.");
+            return;
+          }
+        }
+        // For upgrades (level > 1), user should already be a member with a sponsor
+        else if (level > 1) {
+          if (dashboard.data.sponsor?.walletAddress) {
+            referrer = dashboard.data.sponsor.walletAddress;
+          } else {
+            // Fallback to URL parameter if sponsor not found
+            referrer = referrerAddress || address;
+          }
         }
       }
     } catch (error) {
       console.error("Failed to get referrer:", error);
-      // If error and Level 1, still check URL
-      if (level === 1 && referrerAddress) {
-        referrer = referrerAddress as `0x${string}`;
-      } else if (level === 1) {
-        alert("Please provide a referrer address. Add ?ref=0x... to the URL or visit the membership page with a referral link.");
-        return;
+      // On error, for Level 1, check URL parameter
+      if (level === 1) {
+        if (referrerAddress) {
+          referrer = referrerAddress;
+        } else {
+          alert("Please provide a referrer address. Add ?ref=0x... to the URL or visit the membership page with a referral link.");
+          return;
+        }
+      } else {
+        // For upgrades, use URL parameter or fallback to own address
+        referrer = referrerAddress || address;
       }
     }
     
+    // Ensure we have a referrer before proceeding
+    if (!referrer) {
+      referrer = referrerAddress || address;
+    }
+    
+    // Store referrer for the purchase modal
+    setReferrerForPurchase(referrer);
     setSelectedLevel(level);
   };
 
@@ -308,7 +332,7 @@ export default function MembershipPage() {
           isOpen={!!selectedLevel}
           onClose={() => setSelectedLevel(null)}
           level={selectedLevel}
-          referrer={referrerAddress || address}
+          referrer={referrerForPurchase || referrerAddress || address}
           onSuccess={handlePurchaseSuccess}
         />
       )}

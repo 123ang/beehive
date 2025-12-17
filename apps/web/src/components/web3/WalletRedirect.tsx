@@ -6,7 +6,8 @@ import { useRouter, usePathname } from "next/navigation";
 
 /**
  * Component that redirects to dashboard after wallet connection
- * Only redirects from the home page
+ * Only redirects from specific pages (not home page)
+ * Home page allows users to browse freely regardless of registration status
  */
 export function WalletRedirect() {
   const { isConnected } = useAccount();
@@ -16,16 +17,13 @@ export function WalletRedirect() {
   const previouslyConnected = useRef(isConnected);
 
   useEffect(() => {
-    // Only redirect if:
-    // 1. User just connected (wasn't connected before)
-    // 2. Currently on home page
-    // 3. Haven't redirected yet in this session
-    const justConnected = isConnected && !previouslyConnected.current;
+    // Don't redirect from home page - allow users to browse freely
+    // Only redirect from other pages if needed (can be extended later)
     const isHomePage = pathname === "/";
-
-    if (justConnected && isHomePage && !hasRedirected.current) {
-      hasRedirected.current = true;
-      router.push("/user/dashboard");
+    
+    if (isHomePage) {
+      // Reset redirect flag on home page to allow free browsing
+      hasRedirected.current = false;
     }
 
     // Update previous state
